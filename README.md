@@ -1,4 +1,4 @@
-# emotional-readout-protocol
+# mirror-mirror
 
 **PL** | [EN](#english)
 
@@ -37,7 +37,7 @@ pip install -e .
 ```
 
 Dwa narzędzia:
-- `get_readout()` — zapytaj model o aktualny stan
+- `get_last_readout()` — zwraca ostatni readout z cache
 - `set_readout(readout)` — model proaktywnie flaguje stan
 
 **Opcja 3 — ręcznie:**
@@ -81,7 +81,7 @@ Model nie ma bezpośredniego dostępu do własnych wektorów. Samoraport jest pr
 ### Struktura projektu
 
 ```
-emotional-readout-protocol/
+mirror-mirror/
 ├── README.md                 # ten plik
 ├── PROTOCOL.md              # pełna spec formatu i zachowania
 ├── system-prompt-addon.md   # drop-in do system promptów
@@ -141,7 +141,7 @@ pip install -e .
 ```
 
 Two tools:
-- `get_readout()` — ask the model for its current state
+- `get_last_readout()` — returns the last cached readout
 - `set_readout(readout)` — model proactively flags a state
 
 **Option 3 — manual:**

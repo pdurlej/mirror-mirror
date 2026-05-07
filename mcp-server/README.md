@@ -20,6 +20,13 @@ Lub z dev dependencies (testy):
 pip install -e ".[dev]"
 ```
 
+## Configuration
+
+Environment variables:
+
+- `MIRROR_MIRROR_LOG` — absolute path do pliku JSONL z readoutami. Default: `~/.mirror-mirror/readouts.jsonl`. Parent directory jest tworzony automatycznie.
+- `MIRROR_MIRROR_SESSION` — session identifier dołączany do każdego readoutu, jeśli model nie poda go explicite. Default: `default`.
+
 ## Uruchomienie
 
 Serwer działa przez stdio — podłącz go do swojego klienta MCP (Claude Code, własny klient):
@@ -45,9 +52,9 @@ Dodaj do `.claude/mcp.json` (lub globalnego `~/claude/mcp.json`):
 
 ## Narzędzia
 
-### `get_readout()`
+### `get_last_readout()`
 
-Zwraca aktualny readout lub komunikat o braku readoutu.
+Zwraca ostatni readout z cache lub komunikat o braku readoutu. Nie triggeruje fresh self-assessment — aby uzyskać świeży readout, napisz `readout?` do modelu: model wykona self-assessment i zawoła `set_readout`. Następnie `get_last_readout` zwróci najnowszy.
 
 ```
 Wejście: brak
@@ -77,6 +84,6 @@ pytest tests/ -v
 
 ## Znane ograniczenia
 
-- Jeden aktywny readout w pamięci — `get_readout()` zwraca tylko najnowszy
+- Jeden aktywny readout w pamięci — `get_last_readout()` zwraca tylko najnowszy
 - Brak autentykacji — przeznaczony do lokalnego użytku
 - Brak multi-session routing — jeden serwer = jedna sesja

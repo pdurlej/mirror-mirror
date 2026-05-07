@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "emotional-readout-mcp"
+name = "mirror-mirror"
 version = "0.1.0"
-description = "MCP server for functional-emotional readout protocol"
+description = "MCP server for mirror-mirror — functional-emotional readout protocol"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

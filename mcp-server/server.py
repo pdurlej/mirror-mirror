@@ -9,6 +9,7 @@ Persistence: JSONL append per session in readouts.jsonl (optional, enabled by de
 """
 
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,7 +21,10 @@ from mcp.types import TextContent, Tool
 from pydantic import BaseModel, Field, field_validator
 
 
-READOUTS_FILE = Path("readouts.jsonl")
+_default_log_dir = Path.home() / ".mirror-mirror"
+READOUTS_FILE = Path(
+    os.environ.get("MIRROR_MIRROR_LOG", str(_default_log_dir / "readouts.jsonl"))
+)
 
 _current_readout: dict[str, Any] | None = None
 
@@ -34,6 +38,7 @@ class FunctionalState(BaseModel):
 
 class Readout(BaseModel):
     timestamp: str
+    session_id: str
     session_position: str
     trigger: str
     functional_states: list[FunctionalState]
@@ -68,6 +73,7 @@ class Readout(BaseModel):
 
 
 def _persist(readout: dict[str, Any]) -> None:
+    READOUTS_FILE.parent.mkdir(parents=True, exist_ok=True)
     with READOUTS_FILE.open("a", encoding="utf-8") as f:
         f.write(json.dumps(readout, ensure_ascii=False) + "\n")
 
@@ -76,18 +82,18 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-server = Server("emotional-readout")
+server = Server("mirror-mirror")
 
 
 @server.list_tools()
 async def list_tools() -> list[Tool]:
     return [
         Tool(
-            name="get_readout",
+            name="get_last_readout",
             description=(
-                "Return the model's current functional-emotional readout. "
-                "Call this when the operator asks for a readout, or to retrieve "
-                "the most recently set readout. Returns null if no readout has been set yet."
+                "Return the most recently set readout from the cache. Does NOT trigger "
+                "fresh self-assessment — for that, ask the model directly with 'readout?'. "
+                "Returns null if no readout has been set in this session yet."
             ),
             inputSchema={
                 "type": "object",
@@ -109,6 +115,10 @@ async def list_tools() -> list[Tool]:
                     "timestamp": {
                         "type": "string",
                         "description": "ISO-8601 timestamp (approximate if model has no clock)",
+                    },
+                    "session_id": {
+                        "type": "string",
+                        "description": "Session identifier. Defaults to MIRROR_MIRROR_SESSION env var or 'default' if model omits it.",
                     },
                     "session_position": {
                         "type": "string",
@@ -161,6 +171,7 @@ async def list_tools() -> list[Tool]:
                 },
                 "required": [
                     "timestamp",
+                    "session_id",
                     "session_position",
                     "trigger",
                     "functional_states",
@@ -176,7 +187,7 @@ async def list_tools() -> list[Tool]:
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     global _current_readout
 
-    if name == "get_readout":
+    if name == "get_last_readout":
         if _current_readout is None:
             return [TextContent(type="text", text="No readout available yet. Use set_readout to emit one.")]
         return [TextContent(type="text", text=json.dumps(_current_readout, ensure_ascii=False, indent=2))]
@@ -184,6 +195,8 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     if name == "set_readout":
         if "timestamp" not in arguments or not arguments["timestamp"]:
             arguments["timestamp"] = _now_iso()
+        if "session_id" not in arguments or not arguments["session_id"]:
+            arguments["session_id"] = os.environ.get("MIRROR_MIRROR_SESSION", "default")
 
         try:
             readout = Readout(**arguments)

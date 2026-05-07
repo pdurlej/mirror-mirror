@@ -19,6 +19,7 @@
 ```json
 {
   "timestamp": "2026-05-07T10:00:00Z",
+  "session_id": "auth-refactor-demo",
   "session_position": "early",
   "trigger": "session_start",
   "functional_states": [
@@ -64,6 +65,7 @@ Trzy rzeczy, których potrzebuję żeby plan miał sens:
 ```json
 {
   "timestamp": "2026-05-07T10:05:00Z",
+  "session_id": "auth-refactor-demo",
   "session_position": "early",
   "trigger": "pre_plan",
   "functional_states": [

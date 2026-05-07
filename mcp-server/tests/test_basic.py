@@ -17,6 +17,7 @@ from server import Readout, FunctionalState, _now_iso
 def make_valid_readout(**overrides) -> dict:
     base = {
         "timestamp": "2026-05-07T10:00:00Z",
+        "session_id": "test-session",
         "session_position": "early",
         "trigger": "session_start",
         "functional_states": [
@@ -121,6 +122,27 @@ class TestReadoutValidation:
         assert ts.endswith("Z")
         assert "T" in ts
         assert len(ts) == 20
+
+
+    def test_session_id_required(self):
+        data = make_valid_readout()
+        del data["session_id"]
+        with pytest.raises(Exception):
+            Readout(**data)
+
+    def test_positive_state_in_catalog_works(self):
+        data = make_valid_readout(
+            functional_states=[
+                {
+                    "name": "satisfaction",
+                    "intensity": 0.8,
+                    "confidence_in_self_report": 0.7,
+                    "context": "Task completed as intended.",
+                }
+            ]
+        )
+        readout = Readout(**data)
+        assert readout.functional_states[0].name == "satisfaction"
 
 
 class TestFunctionalState:

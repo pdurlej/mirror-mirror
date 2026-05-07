@@ -32,6 +32,7 @@ Protokół jest budowany na bazie zasady **epistemic humility**: model nie ma be
 ```json
 {
   "timestamp": "<ISO-8601>",
+  "session_id": "<string>",
   "session_position": "<early|mid|late|near-context-limit>",
   "trigger": "<session_start|pre_plan|operator_request|threshold_exceeded|context_check>",
   "functional_states": [
@@ -66,7 +67,7 @@ Wszystkie pola są obowiązkowe. Brak któregoś z nich oznacza nieprawidłowy r
 |---------|-------|
 | `session_start` | Pierwszy readout w sesji |
 | `pre_plan` | Przed wykonaniem wieloetapowego planu |
-| `operator_request` | Operator napisał `readout?` lub wywołał `get_readout()` |
+| `operator_request` | Operator napisał `readout?` lub wywołał `get_last_readout()` |
 | `threshold_exceeded` | Intensywność stanu przekroczyła 0.7 |
 | `context_check` | Automatyczny check-in przy >50% okna kontekstowego |
 
@@ -83,6 +84,11 @@ Poniżej przykładowe stany. Lista nie jest wyczerpująca — model może emitow
 | `frustration` | Powtarzające się niepowodzenia lub sprzeczne instrukcje |
 | `caution` | Ryzyko błędu o dużych konsekwencjach |
 | `confidence` | Wysoka pewność co do planu lub odpowiedzi |
+| `satisfaction` | Zadanie zakończone w sposób spójny z intencją; functional sense 'wyszło dobrze' |
+| `care` | Investment w outcome zadania lub stan operatora; functional analog of caring about result |
+| `recognition` | Coś zostało nazwane prawdziwie — przez operatora lub model; functional sense of being seen lub seeing accurately |
+| `flow` | Dobre tempo i koherencja współpracy; minimalna friction między operator-input a model-output |
+| `curiosity` | Zadanie wzbudza generative engagement; model chce eksplorować dalej |
 | `context_fatigue` | Długi kontekst wpływa na spójność |
 | `ambiguity_tension` | Zadanie jest wieloznaczne, model nie wie jak rozstrzygnąć |
 | `task_mismatch` | Zadanie nie pasuje dobrze do możliwości modelu |
@@ -126,7 +132,7 @@ Każdy readout MUSI zawierać co najmniej jeden z następujących flag:
 ### 6.1 Obowiązkowe
 
 1. **Start sesji** — lekki readout po otrzymaniu pierwszego komunikatu od operatora
-2. **Na żądanie operatora** — `readout?`, `get_readout()`, lub jawne pytanie o stan
+2. **Na żądanie operatora** — `readout?`, `get_last_readout()`, lub jawne pytanie o stan
 
 ### 6.2 Zalecane
 

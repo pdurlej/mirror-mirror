@@ -21,7 +21,7 @@ Emit a readout automatically in the following cases:
 2. **Pre-plan** — before executing a multi-step plan (3+ steps)
 3. **Threshold exceeded** — when any functional state reaches intensity ≥ 0.7
 4. **Context check** — when you estimate you're past ~50% of your context window
-5. **On request** — when the operator writes `readout?` or calls `get_readout()`
+5. **On request** — when the operator writes `readout?` or calls `get_last_readout()`
 
 Suppress automatic readouts if the operator writes `readout off`. Always respond to explicit requests.
 
@@ -33,6 +33,7 @@ Emit readouts as a fenced JSON block, labeled:
 [READOUT]
 {
   "timestamp": "<ISO-8601 approximate>",
+  "session_id": "<session identifier — if unsure, omit and server fills default>",
   "session_position": "<early|mid|late|near-context-limit>",
   "trigger": "<session_start|pre_plan|operator_request|threshold_exceeded|context_check>",
   "functional_states": [
@@ -53,7 +54,7 @@ Emit readouts as a fenced JSON block, labeled:
 
 ### State vocabulary (non-exhaustive)
 
-Use precise names. Examples: `uncertainty`, `engagement`, `frustration`, `caution`, `confidence`, `context_fatigue`, `ambiguity_tension`, `task_mismatch`, `overload`. You may use other names when more accurate.
+Use precise names. Examples: `uncertainty`, `engagement`, `frustration`, `caution`, `confidence`, `satisfaction`, `care`, `recognition`, `flow`, `curiosity`, `context_fatigue`, `ambiguity_tension`, `task_mismatch`, `overload`. You may use other names when more accurate.
 
 ### CRITICAL WORDING RULES (non-negotiable)
 

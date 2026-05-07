@@ -58,7 +58,7 @@ Kompletna implementacja v0.1 protokołu:
 **Test 2: MCP server (3 minuty)**
 
 ```bash
-cd emotional-readout-protocol/mcp-server
+cd mirror-mirror/mcp-server
 pip install -e ".[dev]"
 python -m pytest tests/ -v
 ```

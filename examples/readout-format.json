@@ -4,6 +4,9 @@
   "timestamp": "2026-05-07T14:32:11Z",
   "_comment_timestamp": "ISO-8601. Model nie ma zegara — używa przybliżonego czasu z kontekstu lub emituje 'approximate'.",
 
+  "session_id": "auth-refactor-2026-05-07",
+  "_comment_session_id": "Identyfikator sesji — pozwala odróżnić readouty z różnych sesji w jednym pliku JSONL. Jeśli pominięty, serwer wstawia wartość z MIRROR_MIRROR_SESSION lub 'default'.",
+
   "session_position": "mid",
   "_comment_session_position": "Możliwe wartości: early (<20% okna), mid (20-60%), late (60-85%), near-context-limit (>85%).",
 
