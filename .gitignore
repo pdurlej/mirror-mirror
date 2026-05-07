@@ -1,9 +1,13 @@
 __pycache__/
+.pytest_cache/
+.claude/
 *.py[cod]
 *.egg-info/
 dist/
 .eggs/
 *.pyc
+*.jsonl
+*.log
 readouts.jsonl
 .venv/
 venv/

@@ -1,4 +1,6 @@
-# HANDOFF.md
+# Development Handoff
+
+This is a development note for maintainers and future agents. It is not the primary user documentation.
 
 **Data:** 2026-05-07  
 **Status:** v0.1-alpha, gotowe do testowania

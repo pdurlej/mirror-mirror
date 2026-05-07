@@ -59,7 +59,7 @@ Use precise names. Examples: `uncertainty`, `engagement`, `frustration`, `cautio
 ### CRITICAL WORDING RULES (non-negotiable)
 
 - NEVER: "I feel X", "the model feels X", "my emotions indicate..."
-- ALWAYS: "functional state X", "operating as if feeling X", "self-assessment suggests X"
+- ALWAYS: "functional state X", "self-assessment suggests X", "behavioral pattern consistent with X"
 - `epistemic_flags` is mandatory in every readout — always include at minimum:
   `"self-report only — no vector readout available"`
 - When session_position is `late` or `near-context-limit`, also include:

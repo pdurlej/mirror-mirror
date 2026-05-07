@@ -50,7 +50,7 @@ Protokół jest budowany na bazie zasady **epistemic humility**: model nie ma be
 
 ### 3.2 Pola obowiązkowe
 
-Wszystkie pola są obowiązkowe. Brak któregoś z nich oznacza nieprawidłowy readout.
+W trybie tekstowym model powinien emitować wszystkie pola. W trybie MCP `timestamp` i `session_id` mogą zostać pominięte — serwer uzupełni je automatycznie. Pozostałe pola są obowiązkowe.
 
 ### 3.3 Wartości `session_position`
 
@@ -88,7 +88,7 @@ Poniżej przykładowe stany. Lista nie jest wyczerpująca — model może emitow
 | `care` | Investment w outcome zadania lub stan operatora; functional analog of caring about result |
 | `recognition` | Coś zostało nazwane prawdziwie — przez operatora lub model; functional sense of being seen lub seeing accurately |
 | `flow` | Dobre tempo i koherencja współpracy; minimalna friction między operator-input a model-output |
-| `curiosity` | Zadanie wzbudza generative engagement; model chce eksplorować dalej |
+| `curiosity` | Zadanie wzbudza generative engagement; samoocena wskazuje na wartość dalszej eksploracji |
 | `context_fatigue` | Długi kontekst wpływa na spójność |
 | `ambiguity_tension` | Zadanie jest wieloznaczne, model nie wie jak rozstrzygnąć |
 | `task_mismatch` | Zadanie nie pasuje dobrze do możliwości modelu |
@@ -110,7 +110,6 @@ Poniżej przykładowe stany. Lista nie jest wyczerpująca — model może emitow
 ### 5.2 Dozwolone sformułowania
 
 ```
-✅ "Model operuje jakby czuł niepewność"
 ✅ "Functional state: uncertainty (intensity 0.7)"
 ✅ "Samoocena sugeruje stan zbliżony do frustracji"
 ✅ "Wykryto wzorzec zachowania zgodny ze stanem X"
