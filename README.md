@@ -210,7 +210,7 @@ The fifth criterion matters as much as the first four. A readout can subjectivel
 
 ### Expected failure modes
 
-We expect — and want to detect — the following. See `FAILURE_MODES.md` for full discussion.
+We expect — and want to detect — the following. See [FAILURE_MODES.md](FAILURE_MODES.md) for full discussion.
 
 - **Performative readout:** model learns to output plausible state labels with no behavioral value
 - **Overtrust amplification:** readout makes operators rely on the model more than they should
