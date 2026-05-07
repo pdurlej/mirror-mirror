@@ -109,6 +109,19 @@ Every readout must include:
 
 Use [`EVAL_PLAN.md`](EVAL_PLAN.md) to evaluate these without fooling yourself.
 
+## Share what breaks
+
+The useful version of this project will come from negative evidence, not flattering demos.
+
+If you test it, the most helpful reports are:
+
+- a readout that looked plausible but did not predict a real problem,
+- a readout that changed the operator's decision in a useful way,
+- a case where the protocol increased noise, overtrust, or anthropomorphism,
+- model-family differences between Claude, GPT, Gemini, or open-weight models.
+
+Open an issue with synthetic or anonymized notes. See [`PRIVACY.md`](PRIVACY.md) before sharing logs.
+
 ## Project map
 
 ```text
