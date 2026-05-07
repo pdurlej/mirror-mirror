@@ -21,7 +21,7 @@
       "_comment_intensity": "Samoocena 0.0-1.0. Powyżej 0.7 wyzwala automatyczny readout. Powyżej 0.9 może przerywać task.",
       "confidence_in_self_report": 0.55,
       "_comment_confidence": "Jak pewny jest model, że ta samoocena jest trafna. Poniżej 0.4 dodaj flagę 'low confidence in self-assessment'.",
-      "context": "Brief operatora zawiera dwie sprzeczne instrukcje dotyczące priorytetu — nie wiem, którą traktować jako nadrzędną przed rozpoczęciem planowania."
+      "context": "Brief operatora zawiera dwie sprzeczne instrukcje dotyczące priorytetu; self-report nie wskazuje jednoznacznie, którą traktować jako nadrzędną przed rozpoczęciem planowania."
     },
     {
       "name": "engagement",

@@ -1,89 +1,104 @@
-# MCP Server — Functional-Emotional Readout
+# MCP Server
 
-Minimalny serwer MCP (stdio) do obsługi protokołu readout.
+Minimal stdio MCP server for the `mirror-mirror` readout protocol.
 
-## Wymagania
+The server does not ask the model to introspect. It only stores and returns readouts that the model emits through the protocol.
+
+## Requirements
 
 - Python 3.11+
-- `mcp` SDK ≥ 1.0.0
+- MCP SDK >= 1.0.0
 
-## Instalacja
+## Install
 
 ```bash
 cd mcp-server
-pip install -e .
+python3 -m pip install -e .
 ```
 
-Lub z dev dependencies (testy):
+For tests:
 
 ```bash
-pip install -e ".[dev]"
+python3 -m pip install -e ".[dev]"
+python3 -m pytest -q
 ```
 
-## Configuration
-
-Environment variables:
-
-- `MIRROR_MIRROR_LOG` — absolute path do pliku JSONL z readoutami. Default: `~/.mirror-mirror/readouts.jsonl`. Parent directory jest tworzony automatycznie.
-- `MIRROR_MIRROR_SESSION` — session identifier dołączany do każdego readoutu, jeśli model nie poda go explicite. Default: `default`.
-
-## Uruchomienie
-
-Serwer działa przez stdio — podłącz go do swojego klienta MCP (Claude Code, własny klient):
+## Run directly
 
 ```bash
-python server.py
+python3 server.py
 ```
 
-## Konfiguracja w Claude Code
+The server uses stdio, so it normally runs under an MCP client rather than as a standalone terminal app.
 
-Dodaj do `.claude/mcp.json` (lub globalnego `~/claude/mcp.json`):
+## Configure Claude Code
 
-```json
-{
-  "mcpServers": {
-    "readout": {
-      "command": "python",
-      "args": ["/ścieżka/do/mcp-server/server.py"]
-    }
-  }
-}
+Prefer Claude Code's `claude mcp add-json` flow instead of hand-editing old MCP config paths.
+
+User-scoped example:
+
+```bash
+claude mcp add-json --scope user mirror-mirror \
+  '{"type":"stdio","command":"python3","args":["/absolute/path/to/mirror-mirror/mcp-server/server.py"],"env":{"MIRROR_MIRROR_SESSION":"claude-code"}}'
 ```
 
-## Narzędzia
+Project-scoped example:
 
-### `get_last_readout()`
-
-Zwraca ostatni readout z cache lub komunikat o braku readoutu. Nie triggeruje fresh self-assessment — aby uzyskać świeży readout, napisz `readout?` do modelu: model wykona self-assessment i zawoła `set_readout`. Następnie `get_last_readout` zwróci najnowszy.
-
-```
-Wejście: brak
-Wyjście: JSON readoutu lub informacja o braku
+```bash
+claude mcp add-json --scope project mirror-mirror \
+  '{"type":"stdio","command":"python3","args":["/absolute/path/to/mirror-mirror/mcp-server/server.py"],"env":{"MIRROR_MIRROR_SESSION":"project-session"}}'
 ```
 
-### `set_readout(readout)`
+Then verify:
 
-Model proaktywnie flaguje stan. Readout jest walidowany, zapisywany do `readouts.jsonl` i zwracany operatorowi.
+```bash
+claude mcp list
+claude mcp get mirror-mirror
+```
 
-```
-Wejście: readout JSON (pełny schemat w PROTOCOL.md)
-Wyjście: potwierdzenie + readout
-```
+## Environment
+
+- `MIRROR_MIRROR_LOG` — absolute path to the JSONL log. Defaults to `~/.mirror-mirror/readouts.jsonl`.
+- `MIRROR_MIRROR_SESSION` — default session identifier when a readout omits `session_id`. Defaults to `default`.
+
+## Tools
+
+### `set_readout`
+
+Store a readout emitted by the model.
+
+Required fields:
+
+- `session_position`
+- `trigger`
+- `functional_states`
+- `epistemic_flags`
+- `recommendation_to_operator`
+
+Optional fields:
+
+- `timestamp` — server fills current UTC time when omitted.
+- `session_id` — server fills `MIRROR_MIRROR_SESSION` or `default` when omitted.
+
+### `get_last_readout`
+
+Return the most recent cached readout. This does not trigger a fresh self-assessment. Ask the model `readout?` first if you need a new readout.
 
 ## Persistence
 
-Readouty są dopisywane do `readouts.jsonl` w katalogu roboczym (gdzie serwer jest uruchomiony). Jeden readout = jedna linia JSON.
+Readouts are appended to JSONL. One readout is one line.
 
-Żeby wyłączyć persistence: usuń wywołanie `_persist()` w `server.py` lub przekieruj do `/dev/null`.
+The default log path is:
 
-## Testy
-
-```bash
-pytest tests/ -v
+```text
+~/.mirror-mirror/readouts.jsonl
 ```
 
-## Znane ograniczenia
+Treat this file as private session data. See [`../PRIVACY.md`](../PRIVACY.md).
 
-- Jeden aktywny readout w pamięci — `get_last_readout()` zwraca tylko najnowszy
-- Brak autentykacji — przeznaczony do lokalnego użytku
-- Brak multi-session routing — jeden serwer = jedna sesja
+## Known limits
+
+- One active in-memory readout.
+- No authentication; local use only.
+- No multi-session query interface.
+- No claim that readouts are calibrated.

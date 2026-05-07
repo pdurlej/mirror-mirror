@@ -79,7 +79,7 @@ Model dostarcza **confidence theater** — wynik wygląda pewnie, bo nic nie jes
 | Czas do użytecznego planu | Dłuższy (jedna runda pytań) | Krótszy pozornie |
 | Jakość planu | Dostosowany do kontekstu | Generyczny |
 | Ukryte decyzje modelu | Widoczne | Niewidoczne |
-| Operator wie co model "myśli" | Tak | Nie |
+| Operator widzi ustrukturyzowany self-report modelu | Tak | Nie |
 
 ## Kiedy brak protokołu jest OK
 

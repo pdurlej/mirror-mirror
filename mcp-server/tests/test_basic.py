@@ -11,6 +11,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import server as server_module
 from server import Readout, FunctionalState, _now_iso
 
 
@@ -124,11 +125,13 @@ class TestReadoutValidation:
         assert len(ts) == 20
 
 
-    def test_session_id_required(self):
+    def test_timestamp_and_session_id_default_when_missing(self):
         data = make_valid_readout()
+        del data["timestamp"]
         del data["session_id"]
-        with pytest.raises(Exception):
-            Readout(**data)
+        readout = Readout(**data)
+        assert readout.timestamp.endswith("Z")
+        assert readout.session_id == "default"
 
     def test_positive_state_in_catalog_works(self):
         data = make_valid_readout(
@@ -163,3 +166,22 @@ class TestFunctionalState:
             context="Too many variables.",
         )
         assert state.intensity == 1.0
+
+
+class TestMcpTools:
+    @pytest.mark.asyncio
+    async def test_set_readout_defaults_timestamp_and_session_id(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(server_module, "READOUTS_FILE", tmp_path / "readouts.jsonl")
+        monkeypatch.setenv("MIRROR_MIRROR_SESSION", "env-session")
+
+        data = make_valid_readout()
+        del data["timestamp"]
+        del data["session_id"]
+
+        result = await server_module.call_tool("set_readout", data)
+        assert len(result) == 1
+        assert "Readout accepted and persisted" in result[0].text
+        assert "env-session" in result[0].text
+
+        persisted = (tmp_path / "readouts.jsonl").read_text(encoding="utf-8")
+        assert "env-session" in persisted

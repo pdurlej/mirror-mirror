@@ -2,10 +2,10 @@
 Functional-Emotional Readout MCP Server
 
 Two tools:
-- get_readout: operator asks model for current readout
+- get_last_readout: operator asks for the latest cached readout
 - set_readout: model proactively flags a functional state
 
-Persistence: JSONL append per session in readouts.jsonl (optional, enabled by default)
+Persistence: JSONL append per session, enabled by default.
 """
 
 import json
@@ -29,6 +29,14 @@ READOUTS_FILE = Path(
 _current_readout: dict[str, Any] | None = None
 
 
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _default_session_id() -> str:
+    return os.environ.get("MIRROR_MIRROR_SESSION", "default")
+
+
 class FunctionalState(BaseModel):
     name: str
     intensity: float = Field(ge=0.0, le=1.0)
@@ -37,8 +45,8 @@ class FunctionalState(BaseModel):
 
 
 class Readout(BaseModel):
-    timestamp: str
-    session_id: str
+    timestamp: str = Field(default_factory=_now_iso)
+    session_id: str = Field(default_factory=_default_session_id)
     session_position: str
     trigger: str
     functional_states: list[FunctionalState]
@@ -76,10 +84,6 @@ def _persist(readout: dict[str, Any]) -> None:
     READOUTS_FILE.parent.mkdir(parents=True, exist_ok=True)
     with READOUTS_FILE.open("a", encoding="utf-8") as f:
         f.write(json.dumps(readout, ensure_ascii=False) + "\n")
-
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 server = Server("mirror-mirror")
@@ -170,8 +174,6 @@ async def list_tools() -> list[Tool]:
                     },
                 },
                 "required": [
-                    "timestamp",
-                    "session_id",
                     "session_position",
                     "trigger",
                     "functional_states",
@@ -196,7 +198,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         if "timestamp" not in arguments or not arguments["timestamp"]:
             arguments["timestamp"] = _now_iso()
         if "session_id" not in arguments or not arguments["session_id"]:
-            arguments["session_id"] = os.environ.get("MIRROR_MIRROR_SESSION", "default")
+            arguments["session_id"] = _default_session_id()
 
         try:
             readout = Readout(**arguments)

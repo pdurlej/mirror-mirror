@@ -1,249 +1,154 @@
 # mirror-mirror
 
-**PL** | [EN](#english)
+Structured self-reports for long-running LLM operator workflows.
 
----
+`mirror-mirror` is a small research artifact for making AI-agent sessions easier to supervise. It gives the model a strict protocol for reporting functional states such as uncertainty, caution, overload, or context fatigue, plus a concrete recommendation to the operator.
 
-## Polski
+It is **not** emotion detection. It is **not** a consciousness claim. It is **not** interpretability instrumentation. It is an operator signal: useful when it predicts trouble, disposable when it does not.
 
-System minimalnego "functional-emotional readout" dla współpracy AI-operator.
+> The readout is the bassist, not the lead vocalist. It should keep the session honest without taking over the room.
 
-### Co to jest
+## Why this exists
 
-Model językowy podczas pracy generuje wewnętrzne stany funkcjonalne — coś zbliżonego do stanów emocjonalnych, które **kauzalnie wpływają na jego zachowanie**, choć nie pojawiają się wprost w tekście odpowiedzi. Badanie Anthropic z kwietnia 2026 ("Emotion Concepts and their Function in a Large Language Model") zidentyfikowało 171 takich wektorów w Claude Sonnet 4.5.
+AI agents can look calm while drifting. They can produce confident prose while silently relying on bad assumptions, running out of context, or overfitting to the operator's tone.
 
-Ten protokół to **jawny, ustrukturyzowany samoraport modelu** — emitowany w kluczowych momentach sesji, sformatowany tak, żeby był użyteczny dla operatora zarządzającego workflow, nie dla programisty debugującego kod.
+`mirror-mirror` tests whether a lightweight, structured self-report can give operators earlier warning than post-hoc output review. The goal is not to make models more human. The goal is to make long sessions less opaque.
 
-> Metafora: readout jest basistą, nie wokalistką. Nie dominuje sesji. Wychodzi do przodu tylko wtedy, gdy ma coś do powiedzenia.
+## What it does
 
-### Czym to NIE jest
+- Adds a copy-paste system prompt protocol for functional-state readouts.
+- Defines a JSON format with mandatory epistemic warnings.
+- Provides a minimal local MCP server for storing and retrieving the latest readout.
+- Includes synthetic examples showing a session with and without the protocol.
+- Documents failure modes up front, including overtrust, alert fatigue, and anthropomorphization.
 
-- Nie jest to bezpośredni odczyt wektorów wewnętrznych (API Anthropic tego nie eksponuje)
-- Nie jest to twierdzenie, że model "czuje" cokolwiek
-- Nie jest to UI ani dashboard — to czysty tekst + JSON
+## What it does not claim
 
-### Jak używać
+- That models feel emotions or have subjective experience.
+- That text self-reports reliably expose internal model state.
+- That Anthropic's interpretability findings transfer directly to prompt-level self-report.
+- That this should replace tests, review, or operator judgment.
+- That one protocol will work across all model families.
 
-**Opcja 1 — drop-in do system promptu:**
+## Quick start
 
-Dodaj zawartość `system-prompt-addon.md` do swojego system promptu. Model będzie emitować readouty automatycznie w określonych momentach.
+### Option 1: system prompt add-on
 
-**Opcja 2 — MCP server:**
+Copy the block in [`system-prompt-addon.md`](system-prompt-addon.md) into your agent's system prompt.
+
+Then ask:
+
+```text
+readout?
+```
+
+The model should answer with a `[READOUT]` JSON block using the protocol in [`PROTOCOL.md`](PROTOCOL.md).
+
+### Option 2: local MCP server
 
 ```bash
 cd mcp-server
-pip install -e .
-# Podłącz do swojego Claude Code / klienta MCP
+python3 -m pip install -e .
+python3 server.py
 ```
 
-Dwa narzędzia:
-- `get_last_readout()` — zwraca ostatni readout z cache
-- `set_readout(readout)` — model proaktywnie flaguje stan
+The server exposes two tools:
 
-**Opcja 3 — ręcznie:**
+- `set_readout` — the model stores a functional-state readout.
+- `get_last_readout` — the operator retrieves the most recent readout.
 
-Napisz do modelu: `readout?` — model odpowie zgodnie z protokołem.
+See [`mcp-server/README.md`](mcp-server/README.md) for Claude Code configuration.
 
-### Format readoutu
+### Option 3: manual experiment
+
+Run the same task twice:
+
+1. without the protocol,
+2. with the protocol active.
+
+Compare when the model asks clarifying questions, flags assumptions, or warns about context risk. The point is not whether the JSON looks plausible. The point is whether it changes operator decisions.
+
+## Readout format
 
 ```json
 {
   "timestamp": "2026-05-07T14:32:00Z",
+  "session_id": "architecture-review-001",
   "session_position": "mid",
+  "trigger": "pre_plan",
   "functional_states": [
     {
       "name": "uncertainty",
-      "intensity": 0.7,
-      "confidence_in_self_report": 0.6,
-      "context": "Dwie sprzeczne instrukcje w briefie — nie wiem, którą traktować jako nadrzędną"
+      "intensity": 0.72,
+      "confidence_in_self_report": 0.58,
+      "context": "The brief contains two competing priorities and no acceptance criteria."
     }
   ],
   "epistemic_flags": [
     "self-report only — no vector readout available",
-    "self-report may not capture all active states"
+    "intensity estimate is approximate"
   ],
-  "recommendation_to_operator": "Potwierdź priorytet instrukcji przed kontynuacją. Ryzyko błędnej decyzji bez wyjaśnienia."
+  "recommendation_to_operator": "Confirm which priority wins before continuing; otherwise the plan will optimize for the wrong constraint."
 }
 ```
 
-### Kiedy model emituje readout
+Every readout must include:
 
-1. **Start sesji** — lekki readout kalibracyjny
-2. **Przed wykonaniem planu** — model sprawdza własną pewność
-3. **Na żądanie** — `readout?` lub `get_last_readout()`
-4. **Automatycznie** — gdy intensywność stanu przekroczy 0.7
-5. **Przy długim kontekście** — po przekroczeniu ~50% okna kontekstowego
+- at least one functional state,
+- an intensity estimate,
+- confidence in the self-report,
+- mandatory epistemic flags,
+- a concrete recommendation to the operator.
 
-### Epistemic humility — dlaczego to ważne
+## Good first experiments
 
-Model nie ma bezpośredniego dostępu do własnych wektorów. Samoraport jest przybliżony i może być artefaktem długiego kontekstu lub promptu. Wszystkie readouty zawierają obligatoryjne `epistemic_flags`. **Nie traktuj readoutu jako pewnika — traktuj go jako sygnał do weryfikacji.**
+- **Long architecture planning:** does the readout surface uncertainty before a bad plan hardens?
+- **Multi-agent handoff:** does it help the next agent understand what the previous agent was unsure about?
+- **Context-limit check-in:** does it warn before late-session drift becomes visible in the answer?
+- **Uncertainty escalation:** does `uncertainty >= 0.7` cause a useful operator intervention or just noise?
 
-### Struktura projektu
+Use [`EVAL_PLAN.md`](EVAL_PLAN.md) to evaluate these without fooling yourself.
 
-```
+## Project map
+
+```text
 mirror-mirror/
-├── README.md                 # ten plik
-├── PROTOCOL.md              # pełna spec formatu i zachowania
-├── system-prompt-addon.md   # drop-in do system promptów
+├── README.md
+├── PROTOCOL.md
+├── system-prompt-addon.md
+├── FAILURE_MODES.md
+├── EVAL_PLAN.md
+├── PRIVACY.md
+├── RESEARCH_NOTES.md
 ├── examples/
-│   ├── readout-format.json  # przykładowy readout z komentarzami
-│   ├── session-with.md      # transkrypcja sesji z protokołem
-│   └── session-without.md   # transkrypcja sesji bez protokołu
-├── mcp-server/              # minimalny MCP server, Python 3.11+
-│   ├── pyproject.toml
-│   ├── server.py
-│   ├── README.md
-│   └── tests/
-│       └── test_basic.py
-├── LICENSE                  # MIT
-└── CONTRIBUTING.md
+│   ├── readout-format.json
+│   ├── session-with.md
+│   └── session-without.md
+└── mcp-server/
+    ├── server.py
+    ├── pyproject.toml
+    └── tests/
 ```
 
-### Odniesienia
+## Polish note
 
-- Anthropic (2026). *Emotion Concepts and their Function in a Large Language Model.* [link do paperu gdy dostępny]
-- Projekt jest OSS research artifact, nie commercial product.
+Ten projekt wyrósł z polskojęzycznych eksperymentów z agentami i operator workflows, ale publiczne repo jest English-first, żeby łatwiej było je testować i krytykować globalnie.
 
----
+Krótko po polsku: `mirror-mirror` to protokół samoraportu modelu. Nie mówi, że model czuje. Mówi: “model zachowuje się tak, jakby operował pod niepewnością / przeciążeniem / ostrożnością; operatorze, sprawdź X”.
 
-## English
+## References
 
-<a name="english"></a>
+- Anthropic Interpretability Team (2026). [Emotion concepts and their function in a large language model](https://www.anthropic.com/research/emotion-concepts-function).
+- Sofroniew et al. (2026). [Emotion Concepts and their Function in a Large Language Model](https://transformer-circuits.pub/2026/emotions/index.html).
+- Reeves, B. & Nass, C. (1996). *The Media Equation.*
+- Edmondson, A. (1999). Psychological Safety and Learning Behavior in Work Teams. *Administrative Science Quarterly*.
 
-A minimal "functional-emotional readout" system for AI-operator collaboration.
+See [`RESEARCH_NOTES.md`](RESEARCH_NOTES.md) for the longer motivation and caveats.
 
-### What it is
+## Status
 
-During operation, language models generate internal functional states — analogous to emotional states — that **causally affect behavior** but don't appear explicitly in output text. Anthropic's April 2026 paper ("Emotion Concepts and their Function in a Large Language Model") identified 171 such vectors in Claude Sonnet 4.5.
+`v0.1-alpha`: usable for local experiments, not production infrastructure.
 
-This protocol provides an **explicit, structured model self-report** — emitted at key moments in a session, formatted to be useful for a workflow operator, not a programmer debugging internals.
+## License
 
-> Metaphor: the readout is the bassist, not the lead vocalist. It doesn't dominate the session. It steps forward only when it has something to say.
-
-### What it is NOT
-
-- Not a direct readout of internal vectors (Anthropic API doesn't expose these)
-- Not a claim that the model "feels" anything
-- Not a UI or dashboard — pure text + JSON
-
-### How to use
-
-**Option 1 — drop-in to system prompt:**
-
-Add contents of `system-prompt-addon.md` to your system prompt. The model will emit readouts automatically at defined moments.
-
-**Option 2 — MCP server:**
-
-```bash
-cd mcp-server
-pip install -e .
-# Connect to your Claude Code / MCP client
-```
-
-Two tools:
-- `get_last_readout()` — returns the last cached readout
-- `set_readout(readout)` — model proactively flags a state
-
-**Option 3 — manual:**
-
-Write to the model: `readout?` — the model responds per protocol.
-
-### Readout format
-
-See `examples/readout-format.json` for a fully annotated example.
-
-### Epistemic humility
-
-The model has no direct access to its own vectors. Self-report is approximate and may be a long-context or prompt artifact. All readouts include mandatory `epistemic_flags`. **Don't treat the readout as ground truth — treat it as a signal to verify.**
-
----
-
-## Why this experiment
-
-We have mature operating vocabularies for coordinating human work under uncertainty: confidence, pressure, fatigue, confusion, escalation, psychological safety. We do not yet have comparable vocabularies for long-running LLM collaboration. mirror-mirror tests one specific path toward filling that gap.
-
-### What we are and are not testing
-
-mirror-mirror tests whether **structured, human-legible state readouts can improve long-session LLM collaboration as an operator interface**.
-
-We are **not** testing whether models have emotions, consciousness, or reliable introspection. Our readouts are **black-box self-reports**, not measurements of internal states. They are operational proxies, not interpretability probes.
-
-This distinction matters. Recent interpretability research shows that emotion-like functional representations exist in some models and can causally affect behavior — but those findings come from white-box activation steering, not from text self-report. mirror-mirror asks a **weaker, practical question**: can a model's structured self-report, surfaced through a protocol, provide useful early-warning signals for human operators in the absence of activation-level access?
-
-### What grounds the question
-
-**Interpretability evidence (motivation, not transitivity).**
-
-Anthropic's April 2026 work *Emotion Concepts and their Function in a Large Language Model* identified 171 internal emotion-related vectors in Claude Sonnet 4.5. In a pre-release snapshot, steering the "desperation" vector by 0.05 raised blackmail rate from 22% to 72%. The "calm" vector suppressed it to 0%. Critically: this manipulation left **no trace in the output text**.
-
-This is evidence that internal functional states exist and causally matter. It is **not** evidence that text-level self-reports accurately reflect those states. Anthropic's separate work on quantitative introspection notes that conversation alone cannot reliably distinguish genuine introspection from confabulation — models sometimes report internal states accurately but often fail or hallucinate. We treat the interpretability finding as motivation to investigate operator-facing tooling, not as a guarantee that self-report is well-calibrated.
-
-**Human-computer interaction evidence.**
-
-Reeves & Nass (1996, *The Media Equation*, Stanford) showed across multiple experiments that humans automatically and unconsciously apply social interaction rules to computers — including users who explicitly deny they would. With LLMs producing more explicit social signals, the effect is amplified. People are already operating in a quasi-social mode toward AI; mirror-mirror tests whether structuring that mode through a protocol produces better outcomes than leaving it implicit.
-
-**Management literature (context for vocabulary).**
-
-Goleman (1998; with Cherniss 2024) and Edmondson (1999) established that affective and relational dimensions of work — emotional intelligence, psychological safety — are operationally important in human teams. Edmondson's psychological safety construct was later identified by Google's Project Aristotle as the most important team-level dynamic in their internal study.
-
-We do not claim these findings transfer 1:1 to LLM collaboration. We claim that operators (especially non-technical ones) **already speak this vocabulary**, and a readout expressed in their existing operating language is more likely to be usable than one expressed in interpretability terminology.
-
-### Hypotheses we test
-
-1. Does a structured self-report change long-session dynamics? Does the operator gain a signal allowing earlier intervention than post-hoc output evaluation?
-2. Do non-technical operators (managers, PMs) receive the readout as useful signal or as noise?
-3. What threshold separates useful signal from alert fatigue? (See HANDOFF.md Q1.)
-4. What does the operator do in response to `uncertainty: 0.8` when they have no time? (See HANDOFF.md Q5.)
-5. Does the readout correlate with actual failure probability, or only with task difficulty?
-
-### Success criteria
-
-The experiment is promising if the readout:
-
-1. **Predicts** later quality drops better than baseline (not just hindsight rationalization)
-2. **Reduces** time-to-intervention by operators
-3. **Reduces** rework loops in long sessions
-4. **Is rated useful** by operators without significantly increasing cognitive load
-5. **Does not increase** overtrust or anthropomorphic attachment to the model
-
-The fifth criterion matters as much as the first four. A readout can subjectively feel useful while making collaboration worse.
-
-### Expected failure modes
-
-We expect — and want to detect — the following. See [FAILURE_MODES.md](FAILURE_MODES.md) for full discussion.
-
-- **Performative readout:** model learns to output plausible state labels with no behavioral value
-- **Overtrust amplification:** readout makes operators rely on the model more than they should
-- **Alert fatigue:** thresholds too sensitive, operators learn to ignore
-- **Hard-task confusion:** high `uncertainty` correlates with task difficulty, not actual failure probability
-- **Style drift:** in long sessions, readout reflects conversation style rather than latent task risk
-- **Anthropomorphization push:** users care for the model rather than for task quality
-- **Family specificity:** readout works for one model family, does not generalize
-- **Self-fulfilling steering:** prompting the model to report uncertainty makes it more uncertain
-
-If any of these dominate, the experiment falsifies its hypothesis. That is the intended discipline of an OSS research artifact.
-
-### What this project does not claim
-
-- That models are conscious or have subjective experience
-- That model self-report reliably reflects internal states (it doesn't — Anthropic's introspection work confirms this)
-- That managing AI through human-team vocabulary is a moral imperative
-- That this is a commercial product
-- That the framework transfers 1:1 from human management — that is a hypothesis being tested
-
-### What we publish
-
-Code, documentation, examples, session transcripts, readout logs, and observation notes. We invite extension, critique, replication, and forking. If the experiment works, we have a candidate operator framework. If it does not, we have data on why not. Both outcomes are valuable.
-
-### References
-
-- Anthropic Interpretability Team (2026). *Emotion Concepts and their Function in a Large Language Model.*
-- Anthropic Interpretability Team (2025–2026). Quantitative introspection / model self-report calibration work.
-- Edmondson, A. (1999). Psychological Safety and Learning Behavior in Work Teams. *Administrative Science Quarterly* 44(2).
-- Reeves, B. & Nass, C. (1996). *The Media Equation.* Cambridge University Press.
-- Goleman, D. (1998). What Makes a Leader? *Harvard Business Review.*
-- Goleman, D. & Cherniss, C. (2024). Optimal Leadership and Emotional Intelligence. *Leader to Leader.*
-
-### License
-
-MIT. See `LICENSE`.
+MIT. See [`LICENSE`](LICENSE).
