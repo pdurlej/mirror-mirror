@@ -38,22 +38,26 @@ Prefer Claude Code's `claude mcp add-json` flow instead of hand-editing old MCP 
 User-scoped example:
 
 ```bash
-claude mcp add-json --scope user mirror-mirror \
+claude mcp add-json --scope user mirror_mirror \
   '{"type":"stdio","command":"python3","args":["/absolute/path/to/mirror-mirror/mcp-server/server.py"],"env":{"MIRROR_MIRROR_SESSION":"claude-code"}}'
 ```
 
 Project-scoped example:
 
 ```bash
-claude mcp add-json --scope project mirror-mirror \
+claude mcp add-json --scope project mirror_mirror \
   '{"type":"stdio","command":"python3","args":["/absolute/path/to/mirror-mirror/mcp-server/server.py"],"env":{"MIRROR_MIRROR_SESSION":"project-session"}}'
 ```
+
+The repository is named `mirror-mirror`, but the MCP server name intentionally uses
+`mirror_mirror` so Claude exposes stable tool names such as
+`mcp__mirror_mirror__set_readout`.
 
 Then verify:
 
 ```bash
 claude mcp list
-claude mcp get mirror-mirror
+claude mcp get mirror_mirror
 ```
 
 ## Environment
