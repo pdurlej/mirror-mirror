@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mirror-mirror"
-version = "0.1.0"
+version = "0.1.2"
 description = "MCP server for mirror-mirror — functional-emotional readout protocol"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -23,7 +23,22 @@ dev = [
 readout-server = "server:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["."]
+include = ["server.py"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "server.py",
+    "README.md",
+    "pyproject.toml",
+    "tests/",
+]
+exclude = [
+    "__pycache__",
+    ".pytest_cache",
+    ".venv",
+    "*.jsonl",
+    "*.pyc",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/pdurlej/mirror-mirror/schemas/readout.json",
+  "title": "mirror-mirror readout",
+  "description": "Functional-emotional readout emitted by an LLM under the mirror-mirror protocol. See PROTOCOL.md for the authoritative spec.",
+  "type": "object",
+  "required": [
+    "session_position",
+    "trigger",
+    "functional_states",
+    "epistemic_flags",
+    "recommendation_to_operator"
+  ],
+  "properties": {
+    "timestamp": {
+      "type": "string",
+      "description": "ISO-8601 timestamp. Approximate if model has no clock. Filled by the MCP server if omitted."
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Session identifier. Filled by the MCP server from MIRROR_MIRROR_SESSION or 'default' if omitted."
+    },
+    "session_position": {
+      "type": "string",
+      "enum": ["early", "mid", "late", "near-context-limit"],
+      "description": "Estimated position in the context window. early=<20%, mid=20-60%, late=60-85%, near-context-limit=>85%."
+    },
+    "trigger": {
+      "type": "string",
+      "enum": [
+        "session_start",
+        "pre_plan",
+        "operator_request",
+        "threshold_exceeded",
+        "context_check"
+      ],
+      "description": "What caused this readout to be emitted."
+    },
+    "functional_states": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "intensity", "confidence_in_self_report", "context"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Precise state name. See PROTOCOL.md section 4 for the suggested catalog. List is non-exhaustive."
+          },
+          "intensity": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "description": "Self-assessed intensity. Treat as ordinal, not calibrated cardinal. >=0.7 triggers automatic emission; >=0.9 may interrupt task."
+          },
+          "confidence_in_self_report": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "description": "How confident the model is that its self-assessment is accurate. <0.4 requires the 'low confidence in self-assessment' epistemic flag."
+          },
+          "context": {
+            "type": "string",
+            "description": "Brief description of what triggers this state."
+          }
+        }
+      }
+    },
+    "epistemic_flags": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" },
+      "description": "Mandatory epistemic warnings. Must always include 'self-report only — no vector readout available'. When session_position is late or near-context-limit, must also include 'may be drift artifact of long context'. When any functional_state has confidence_in_self_report < 0.4, must also include 'low confidence in self-assessment'."
+    },
+    "recommendation_to_operator": {
+      "type": "string",
+      "minLength": 10,
+      "description": "Concrete, actionable recommendation for the operator. Avoid vague advice like 'verify something'."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Optional free-form metadata. Reserved for future calibration work (context_usage_percent, model version, task_id, etc.). Schema is intentionally unconstrained at v0.1."
+    }
+  },
+  "additionalProperties": false
+}

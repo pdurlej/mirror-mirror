@@ -83,6 +83,15 @@ Optional fields:
 
 - `timestamp` — server fills current UTC time when omitted.
 - `session_id` — server fills `MIRROR_MIRROR_SESSION` or `default` when omitted.
+- `metadata` — free-form object reserved for future calibration (e.g. `context_usage_percent`, `model`, `task_id`). Schema unconstrained at v0.1.
+
+The server enforces three conditional rules from `PROTOCOL.md` §5.3:
+
+- `session_position ∈ {late, near-context-limit}` requires the `"may be drift artifact of long context"` flag.
+- Any `confidence_in_self_report < 0.4` requires the `"low confidence in self-assessment"` flag.
+- `recommendation_to_operator` must be at least 10 non-whitespace characters.
+
+Readouts that fail these rules are rejected with a validation error.
 
 ### `get_last_readout`
 
@@ -98,11 +107,15 @@ The default log path is:
 ~/.mirror-mirror/readouts.jsonl
 ```
 
+On startup the server reads the last line of this file and uses it as the cached readout, so a process restart does not silently lose the most recent state. If the JSONL is missing, empty, or corrupt, the server starts with an empty cache and logs a warning to stderr.
+
+Disk-level errors during `_persist` (full disk, permission denied) are caught and logged to stderr; the in-memory readout remains the source of truth for the current session and the `set_readout` call still succeeds.
+
 Treat this file as private session data. See [`../PRIVACY.md`](../PRIVACY.md).
 
 ## Known limits
 
 - One active in-memory readout.
 - No authentication; local use only.
-- No multi-session query interface.
+- No multi-session query interface (the JSONL is a flat log).
 - No claim that readouts are calibrated.

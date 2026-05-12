@@ -134,7 +134,8 @@ mirror-mirror/
 ├── PRIVACY.md
 ├── RESEARCH_NOTES.md
 ├── examples/
-│   ├── readout-format.json
+│   ├── readout-schema.json
+│   ├── readout-example.md
 │   ├── session-with.md
 │   └── session-without.md
 └── mcp-server/

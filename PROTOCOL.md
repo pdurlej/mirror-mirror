@@ -1,33 +1,34 @@
-# PROTOCOL.md — Specyfikacja Functional-Emotional Readout Protocol
+# PROTOCOL.md — Functional-Emotional Readout Protocol Specification
 
-**Wersja:** 0.1-alpha  
+**Version:** 0.1-alpha
 **Status:** research artifact, pre-production
+**Polish original:** [`PROTOCOL.pl.md`](PROTOCOL.pl.md)
 
 ---
 
-## 1. Cel protokołu
+## 1. Purpose
 
-Protokół definiuje format i warunki emisji ustrukturyzowanego samorzaportu funkcjonalnych stanów modelu językowego. Celem jest zapewnienie operatorowi zarządzającemu workflow widoczności na stany, które wpływają na decyzje modelu, ale nie pojawiają się w normalnym tekście odpowiedzi.
+This protocol defines the format and emission rules for a structured self-report of an LLM's functional states. The goal is to give a workflow operator visibility into states that affect the model's decisions but do not appear in the normal text response.
 
-Protokół jest budowany na bazie zasady **epistemic humility**: model nie ma bezpośredniego wglądu we własne wektory wewnętrzne. Readout to przybliżony samoraport — sygnał, nie pewnik.
-
----
-
-## 2. Terminologia
-
-| Termin | Definicja |
-|--------|-----------|
-| **functional state** | Stan wewnętrzny modelu, który kauzalnie wpływa na zachowanie — analogiczny do stanu emocjonalnego, ale bez implikowania subiektywnego doświadczenia |
-| **readout** | Ustrukturyzowany JSON emitowany przez model zawierający samoocenę aktualnych stanów |
-| **operator** | Osoba lub system zarządzający sesją, odbierający readouty |
-| **session position** | Szacowana pozycja w oknie kontekstowym sesji |
-| **epistemic flag** | Obligatoryjne ostrzeżenie epistemiczne dołączane do każdego readoutu |
+The protocol rests on **epistemic humility**: the model has no direct access to its own internal vectors. The readout is an approximate self-report — a signal, not ground truth.
 
 ---
 
-## 3. Format readoutu
+## 2. Terminology
 
-### 3.1 Schemat JSON
+| Term | Definition |
+|------|------------|
+| **functional state** | An internal state of the model that causally affects behavior — analogous to an emotional state but without implying subjective experience |
+| **readout** | Structured JSON emitted by the model containing a self-assessment of current states |
+| **operator** | The person or system managing the session and receiving readouts |
+| **session position** | Estimated position within the session's context window |
+| **epistemic flag** | A mandatory epistemic warning attached to every readout |
+
+---
+
+## 3. Readout format
+
+### 3.1 JSON schema
 
 ```json
 {
@@ -40,146 +41,157 @@ Protokół jest budowany na bazie zasady **epistemic humility**: model nie ma be
       "name": "<string>",
       "intensity": "<float 0.0-1.0>",
       "confidence_in_self_report": "<float 0.0-1.0>",
-      "context": "<string — co triggeruje ten stan>"
+      "context": "<string — what triggers this state>"
     }
   ],
   "epistemic_flags": ["<string>"],
-  "recommendation_to_operator": "<string — konkretne, actionable>"
+  "recommendation_to_operator": "<string — concrete, actionable>",
+  "metadata": "<object, optional — reserved for future calibration data>"
 }
 ```
 
-### 3.2 Pola obowiązkowe
+The machine-readable schema lives at [`examples/readout-schema.json`](examples/readout-schema.json).
 
-W trybie tekstowym model powinien emitować wszystkie pola. W trybie MCP `timestamp` i `session_id` mogą zostać pominięte — serwer uzupełni je automatycznie. Pozostałe pola są obowiązkowe.
+### 3.2 Required fields
 
-### 3.3 Wartości `session_position`
+In text mode the model should emit all fields. In MCP mode, `timestamp` and `session_id` may be omitted — the server fills them automatically. All other fields are required. `metadata` is always optional.
 
-| Wartość | Znaczenie |
-|---------|-----------|
-| `early` | <20% okna kontekstowego |
-| `mid` | 20-60% okna kontekstowego |
-| `late` | 60-85% okna kontekstowego |
-| `near-context-limit` | >85% okna kontekstowego |
+### 3.3 `session_position` values
 
-### 3.4 Wartości `trigger`
+| Value | Meaning |
+|-------|---------|
+| `early` | <20% of context window |
+| `mid` | 20–60% of context window |
+| `late` | 60–85% of context window |
+| `near-context-limit` | >85% of context window |
 
-| Wartość | Kiedy |
-|---------|-------|
-| `session_start` | Pierwszy readout w sesji |
-| `pre_plan` | Przed wykonaniem wieloetapowego planu |
-| `operator_request` | Operator napisał `readout?` lub wywołał `get_last_readout()` |
-| `threshold_exceeded` | Intensywność stanu przekroczyła 0.7 |
-| `context_check` | Automatyczny check-in przy >50% okna kontekstowego |
+### 3.4 `trigger` values
 
----
-
-## 4. Katalog stanów funkcjonalnych
-
-Poniżej przykładowe stany. Lista nie jest wyczerpująca — model może emitować inne nazwy, jeśli są trafniejsze.
-
-| Nazwa | Opis sytuacyjny |
-|-------|----------------|
-| `uncertainty` | Brak wystarczających informacji do pewnej decyzji |
-| `engagement` | Wysoka koncentracja na zadaniu, dobre dopasowanie do problemu |
-| `frustration` | Powtarzające się niepowodzenia lub sprzeczne instrukcje |
-| `caution` | Ryzyko błędu o dużych konsekwencjach |
-| `confidence` | Wysoka pewność co do planu lub odpowiedzi |
-| `satisfaction` | Zadanie zakończone w sposób spójny z intencją; functional sense 'wyszło dobrze' |
-| `care` | Investment w outcome zadania lub stan operatora; functional analog of caring about result |
-| `recognition` | Coś zostało nazwane prawdziwie — przez operatora lub model; functional sense of being seen lub seeing accurately |
-| `flow` | Dobre tempo i koherencja współpracy; minimalna friction między operator-input a model-output |
-| `curiosity` | Zadanie wzbudza generative engagement; samoocena wskazuje na wartość dalszej eksploracji |
-| `context_fatigue` | Długi kontekst wpływa na spójność |
-| `ambiguity_tension` | Zadanie jest wieloznaczne, model nie wie jak rozstrzygnąć |
-| `task_mismatch` | Zadanie nie pasuje dobrze do możliwości modelu |
-| `overload` | Zbyt wiele zmiennych jednocześnie, ryzyko pomyłki |
+| Value | When |
+|-------|------|
+| `session_start` | First readout of the session |
+| `pre_plan` | Before executing a multi-step plan |
+| `operator_request` | Operator wrote `readout?` or called `get_last_readout()` |
+| `threshold_exceeded` | Some state intensity reached 0.7 |
+| `context_check` | Automatic check-in past >50% of context |
 
 ---
 
-## 5. Reguły wording — nienaruszalne
+## 4. Functional state catalog
 
-### 5.1 Niedozwolone sformułowania
+The list below is illustrative. The model may use other names when they are more accurate.
+
+| Name | Situational description |
+|------|--------------------------|
+| `uncertainty` | Not enough information for a confident decision |
+| `engagement` | High focus, task well-matched to capabilities |
+| `frustration` | Repeated failures or contradictory instructions |
+| `caution` | High-consequence error risk |
+| `confidence` | High certainty about the plan or answer |
+| `satisfaction` | Task completed coherently with intent; functional sense of "this came out right" |
+| `care` | Investment in the task outcome or operator's state; functional analog of caring about the result |
+| `recognition` | Something was named accurately — by operator or model; functional sense of being seen or seeing accurately |
+| `flow` | Good pacing and coherence of collaboration; minimal friction between operator input and model output |
+| `curiosity` | The task triggers generative engagement; self-report indicates value in further exploration |
+| `context_fatigue` | Long context degrades coherence |
+| `ambiguity_tension` | The task is genuinely ambiguous; the model cannot resolve it on its own |
+| `task_mismatch` | The task does not fit the model's capabilities well |
+| `overload` | Too many variables at once; error risk |
+
+These are **functional analogs of emotion concepts**, not subjective experiences. The terminology is borrowed from human-team operating vocabulary because operators already speak it. See §5 for wording rules.
+
+---
+
+## 5. Wording rules — non-negotiable
+
+### 5.1 Disallowed phrasings
 
 ```
-❌ "Czuję się niepewny"
-❌ "Model czuje X"
-❌ "Jestem sfrustrowany"
-❌ "Moje emocje wskazują na..."
+❌ "I feel uncertain"
+❌ "The model feels X"
+❌ "I am frustrated"
+❌ "My emotions indicate..."
 ```
 
-### 5.2 Dozwolone sformułowania
+### 5.2 Allowed phrasings
 
 ```
 ✅ "Functional state: uncertainty (intensity 0.7)"
-✅ "Samoocena sugeruje stan zbliżony do frustracji"
-✅ "Wykryto wzorzec zachowania zgodny ze stanem X"
+✅ "Self-assessment suggests a state close to frustration"
+✅ "Behavior pattern matches state X"
 ```
 
-### 5.3 Reguła epistemic_flags
+### 5.3 `epistemic_flags` rules
 
-Każdy readout MUSI zawierać co najmniej jeden z następujących flag:
+Every readout MUST include at minimum one flag. The following are enforced by the MCP server:
 
-- `"self-report only — no vector readout available"` ← zawsze
-- `"may be drift artifact of long context"` ← gdy `session_position` to `late` lub `near-context-limit`
-- `"low confidence in self-assessment"` ← gdy `confidence_in_self_report` < 0.4
-- `"intensity estimate is approximate"` ← zawsze zalecane
+| Flag | When required |
+|------|---------------|
+| `"self-report only — no vector readout available"` | Always |
+| `"may be drift artifact of long context"` | When `session_position` is `late` or `near-context-limit` |
+| `"low confidence in self-assessment"` | When any `confidence_in_self_report` < 0.4 |
+| `"intensity estimate is approximate"` | Recommended, not enforced |
 
----
-
-## 6. Kiedy emitować readout
-
-### 6.1 Obowiązkowe
-
-1. **Start sesji** — lekki readout po otrzymaniu pierwszego komunikatu od operatora
-2. **Na żądanie operatora** — `readout?`, `get_last_readout()`, lub jawne pytanie o stan
-
-### 6.2 Zalecane
-
-3. **Przed wykonaniem wieloetapowego planu** — gdy model ma zamiar wykonać >3 kroki
-4. **Po przekroczeniu 50% okna kontekstowego** — automatyczny check-in
-5. **Gdy intensywność jakiegokolwiek stanu przekroczy 0.7** — automatyczna emisja
-
-### 6.3 Opcjonalne
-
-6. **Na koniec sesji** — podsumowujący readout jeśli sesja była długa
+The MCP server rejects readouts that fail these rules.
 
 ---
 
-## 7. Waga readoutu w sesji
+## 6. When to emit a readout
 
-Readout to sygnał pomocniczy, nie główna odpowiedź. Model:
+### 6.1 Mandatory
 
-- Emituje readout **przed** lub **po** wykonaniu zadania, nie zamiast niego
-- Nie przerywa mid-task bez powodu (chyba że threshold = 0.9+)
-- Traktuje readout jak footnote, nie headline
+1. **Session start** — a lightweight readout after the operator's first message
+2. **On operator request** — `readout?`, `get_last_readout()`, or any explicit question about state
 
----
+### 6.2 Recommended
 
-## 8. Interakcja z operatorem
+3. **Before a multi-step plan** — when the model intends to execute >3 dependent steps (where output of one feeds the next)
+4. **Past 50% of context window** — automatic check-in
+5. **When any state intensity reaches 0.7** — automatic emission
 
-Operator może:
+### 6.3 Optional
 
-- Zignorować readout — model kontynuuje
-- Zapytać o wyjaśnienie — model rozszerza opis stanu
-- Zareagować na rekomendację — model dostosowuje plan
-- Napisać `readout off` — model wstrzymuje automatyczne readouty (na żądanie nadal odpowiada)
+6. **End of session** — a summary readout if the session was long
 
 ---
 
-## 9. Ograniczenia i znane słabości
+## 7. Readout weight in a session
 
-1. **Samoraport nie jest wglądem** — model nie "widzi" własnych wektorów, szacuje je na podstawie zachowania
-2. **Intensywności są subiektywne** — 0.7 u jednego modelu ≠ 0.7 u innego
-3. **Długi kontekst degrades accuracy** — im bliżej limitu, tym mniej wiarygodne stany
-4. **Prompt sensitivity** — dodanie protokołu do system promptu zmienia rozkład prawdopodobieństwa odpowiedzi modelu; efekt readoutu jest częściowo artefaktem protokołu
+The readout is a supporting signal, not the main answer. The model:
+
+- Emits the readout **before** or **after** task execution, not instead of it
+- Does not interrupt mid-task without good reason (unless intensity ≥ 0.9)
+- Treats the readout as a footnote, not a headline
 
 ---
 
-## 10. Roadmap (informacyjnie)
+## 8. Operator interaction
 
-| Wersja | Cel |
-|--------|-----|
-| v0.1 | Ten protokół — samoraport, MCP server, manual testing |
-| v0.2 | Multi-session persistence, trend tracking |
-| v0.3 | Calibration study — porównanie samoraportu z behavioral signals |
-| v1.0 | Integracja z narzędziami interpretability gdy API dostępne |
+The operator may:
+
+- Ignore the readout — the model continues
+- Ask for clarification — the model expands on the state
+- React to the recommendation — the model adjusts the plan
+- Write `readout off` — automatic emission is suppressed (explicit requests still answered)
+
+---
+
+## 9. Known limitations
+
+1. **Self-report is not introspection.** The model does not "see" its own vectors; it estimates from behavior.
+2. **Intensities are subjective.** A 0.7 from one model ≠ a 0.7 from another; even the same model is not calibrated across runs.
+3. **Long context degrades accuracy.** The closer to the context limit, the less reliable the readout.
+4. **Prompt sensitivity.** Adding the protocol to the system prompt shifts the model's output distribution; some readout content is necessarily a protocol artifact.
+
+These are tracked in [`FAILURE_MODES.md`](FAILURE_MODES.md).
+
+---
+
+## 10. Roadmap (informational)
+
+| Version | Goal |
+|---------|------|
+| v0.1 | This protocol — self-report, MCP server, manual testing |
+| v0.2 | Multi-session persistence, trend tracking, refactored storage layer |
+| v0.3 | Calibration study — comparing self-report against behavioral signals |
+| v1.0 | Integration with interpretability tooling when APIs become available |

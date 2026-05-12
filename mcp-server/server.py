@@ -6,8 +6,11 @@ Two tools:
 - set_readout: model proactively flags a functional state
 
 Persistence: JSONL append per session, enabled by default.
+On startup the server hydrates the in-memory cache from the last line of the
+log file so a restart does not silently drop the most recent readout.
 """
 
+import asyncio
 import json
 import os
 import sys
@@ -18,7 +21,7 @@ from typing import Any
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 _default_log_dir = Path.home() / ".mirror-mirror"
@@ -52,6 +55,7 @@ class Readout(BaseModel):
     functional_states: list[FunctionalState]
     epistemic_flags: list[str]
     recommendation_to_operator: str
+    metadata: dict[str, Any] | None = None
 
     @field_validator("session_position")
     @classmethod
@@ -79,11 +83,74 @@ class Readout(BaseModel):
             raise ValueError(f"epistemic_flags must include: '{mandatory}'")
         return v
 
+    @field_validator("recommendation_to_operator")
+    @classmethod
+    def validate_recommendation_length(cls, v: str) -> str:
+        if len(v.strip()) < 10:
+            raise ValueError(
+                "recommendation_to_operator must be a concrete, actionable string "
+                "(min 10 non-whitespace characters)"
+            )
+        return v
+
+    @model_validator(mode="after")
+    def validate_flag_consistency(self) -> "Readout":
+        """Enforce PROTOCOL.md §5.3 conditional epistemic-flag rules."""
+        drift_flag = "may be drift artifact of long context"
+        if self.session_position in ("late", "near-context-limit"):
+            if drift_flag not in self.epistemic_flags:
+                raise ValueError(
+                    f"session_position '{self.session_position}' requires "
+                    f"epistemic_flag '{drift_flag}'"
+                )
+
+        low_conf_flag = "low confidence in self-assessment"
+        any_low = any(
+            s.confidence_in_self_report < 0.4 for s in self.functional_states
+        )
+        if any_low and low_conf_flag not in self.epistemic_flags:
+            raise ValueError(
+                f"functional_states with confidence_in_self_report < 0.4 require "
+                f"epistemic_flag '{low_conf_flag}'"
+            )
+        return self
+
 
 def _persist(readout: dict[str, Any]) -> None:
-    READOUTS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with READOUTS_FILE.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(readout, ensure_ascii=False) + "\n")
+    """Append a readout to the JSONL log. Disk errors are logged but non-fatal —
+    the in-memory readout is the source of truth for the current session."""
+    try:
+        READOUTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with READOUTS_FILE.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(readout, ensure_ascii=False) + "\n")
+    except OSError as exc:
+        print(
+            f"[mirror-mirror] WARN: failed to persist readout to "
+            f"{READOUTS_FILE}: {exc}",
+            file=sys.stderr,
+        )
+
+
+def _hydrate_from_disk() -> dict[str, Any] | None:
+    """Load the last readout from JSONL if it exists. Survives process restart."""
+    if not READOUTS_FILE.exists():
+        return None
+    try:
+        with READOUTS_FILE.open("r", encoding="utf-8") as f:
+            last_line: str | None = None
+            for line in f:
+                if line.strip():
+                    last_line = line
+        if last_line is None:
+            return None
+        return json.loads(last_line)
+    except (OSError, json.JSONDecodeError) as exc:
+        print(
+            f"[mirror-mirror] WARN: could not hydrate from "
+            f"{READOUTS_FILE}: {exc}",
+            file=sys.stderr,
+        )
+        return None
 
 
 server = Server("mirror-mirror")
@@ -111,14 +178,14 @@ async def list_tools() -> list[Tool]:
                 "Model proactively flags its current functional states. "
                 "Use this when intensity of any state exceeds 0.7, before executing "
                 "a multi-step plan, at session start, or at context check-in. "
-                "Readout is persisted to readouts.jsonl and returned to the operator."
+                "Readout is persisted to the JSONL log and returned to the operator."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "timestamp": {
                         "type": "string",
-                        "description": "ISO-8601 timestamp (approximate if model has no clock)",
+                        "description": "ISO-8601 timestamp (approximate if model has no clock). Server fills if omitted.",
                     },
                     "session_id": {
                         "type": "string",
@@ -163,14 +230,24 @@ async def list_tools() -> list[Tool]:
                         "items": {"type": "string"},
                         "description": (
                             "Must include 'self-report only — no vector readout available'. "
-                            "Add 'may be drift artifact of long context' when session_position "
-                            "is late or near-context-limit."
+                            "When session_position is 'late' or 'near-context-limit', "
+                            "must also include 'may be drift artifact of long context'. "
+                            "When any functional_state has confidence_in_self_report < 0.4, "
+                            "must also include 'low confidence in self-assessment'."
                         ),
                         "minItems": 1,
                     },
                     "recommendation_to_operator": {
                         "type": "string",
-                        "description": "Concrete, actionable recommendation for the operator",
+                        "description": "Concrete, actionable recommendation for the operator (min 10 chars).",
+                    },
+                    "metadata": {
+                        "type": "object",
+                        "description": (
+                            "Optional free-form metadata. Reserved for future calibration "
+                            "work (e.g. context_usage_percent, model version, task_id). "
+                            "Schema is intentionally unconstrained at v0.1."
+                        ),
                     },
                 },
                 "required": [
@@ -195,9 +272,11 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         return [TextContent(type="text", text=json.dumps(_current_readout, ensure_ascii=False, indent=2))]
 
     if name == "set_readout":
-        if "timestamp" not in arguments or not arguments["timestamp"]:
+        arguments.setdefault("timestamp", _now_iso())
+        if not arguments.get("timestamp"):
             arguments["timestamp"] = _now_iso()
-        if "session_id" not in arguments or not arguments["session_id"]:
+        arguments.setdefault("session_id", _default_session_id())
+        if not arguments.get("session_id"):
             arguments["session_id"] = _default_session_id()
 
         try:
@@ -205,7 +284,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         except Exception as exc:
             return [TextContent(type="text", text=f"Validation error: {exc}")]
 
-        readout_dict = readout.model_dump()
+        readout_dict = readout.model_dump(mode="json")
         _current_readout = readout_dict
         _persist(readout_dict)
 
@@ -223,7 +302,13 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
 
 def main() -> None:
-    import asyncio
+    global _current_readout
+    _current_readout = _hydrate_from_disk()
+    if _current_readout is not None:
+        print(
+            f"[mirror-mirror] hydrated last readout from {READOUTS_FILE}",
+            file=sys.stderr,
+        )
 
     async def run() -> None:
         async with stdio_server() as (read_stream, write_stream):

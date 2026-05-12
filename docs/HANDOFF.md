@@ -16,7 +16,8 @@ Kompletna implementacja v0.1 protokołu:
 | `README.md` | ✅ | Bilingual PL/EN, instrukcje użycia |
 | `PROTOCOL.md` | ✅ | Pełna spec formatu, reguły wording, roadmap |
 | `system-prompt-addon.md` | ✅ | Drop-in, copy-paste do system promptu |
-| `examples/readout-format.json` | ✅ | Annotated example z polami `_comment` |
+| `examples/readout-schema.json` | ✅ | Valid JSON Schema (draft-07) |
+| `examples/readout-example.md` | ✅ | Annotated example with field-by-field notes |
 | `examples/session-with.md` | ✅ | Syntetyczna sesja z readoutami |
 | `examples/session-without.md` | ✅ | Ta sama sesja bez protokołu + analiza |
 | `mcp-server/server.py` | ✅ | stdio MCP, dwa tools: get/set_readout |
