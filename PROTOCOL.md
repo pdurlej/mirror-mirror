@@ -187,7 +187,22 @@ These are tracked in [`FAILURE_MODES.md`](FAILURE_MODES.md).
 
 ---
 
-## 10. Roadmap (informational)
+## 10. Usage telemetry (optional)
+
+The MCP server can optionally enrich every readout with a snapshot of the model's quota usage by shelling out to the [codexbar](https://github.com/codexbar/codexbar) CLI. This gives the operator (and the model) visibility into:
+
+- **5-hour rolling window** — how much of the short-term rate limit is consumed
+- **Weekly window** — how much of the long-term cap is consumed
+
+When peak window usage is high, the server auto-injects an epistemic flag (`"quota pressure may affect session continuity (peak window usage ~X%)"` at ≥70%, with `"critical"` suffix at ≥90%). The model can also call `get_session_usage` directly before deciding whether to start a long task.
+
+This is operationally important: a model at 92% of its weekly cap should behave differently — e.g. confirm with the operator before kicking off a refactor it cannot finish — even though the model has no first-class signal about quota in its activations. The protocol surfaces the information without pretending the model "knows" it natively.
+
+Disable with `MIRROR_MIRROR_USAGE=off`. See `mcp-server/README.md` for environment variables.
+
+---
+
+## 11. Roadmap (informational)
 
 | Version | Goal |
 |---------|------|

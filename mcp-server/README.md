@@ -64,6 +64,10 @@ claude mcp get mirror_mirror
 
 - `MIRROR_MIRROR_LOG` — absolute path to the JSONL log. Defaults to `~/.mirror-mirror/readouts.jsonl`.
 - `MIRROR_MIRROR_SESSION` — default session identifier when a readout omits `session_id`. Defaults to `default`.
+- `MIRROR_MIRROR_USAGE` — set to `off` to disable the codexbar usage integration. Default: on.
+- `MIRROR_MIRROR_USAGE_PROVIDER` — codexbar `--provider` argument. Default: `claude`.
+- `MIRROR_MIRROR_USAGE_CMD` — override the entire usage command (useful for tests). Default: `codexbar usage --json`. If `--provider` is not present, it is appended.
+- `MIRROR_MIRROR_USAGE_TIMEOUT` — seconds before the subprocess is killed. Default: `4.0`.
 
 ## Tools
 
@@ -96,6 +100,29 @@ Readouts that fail these rules are rejected with a validation error.
 ### `get_last_readout`
 
 Return the most recent cached readout. This does not trigger a fresh self-assessment. Ask the model `readout?` first if you need a new readout.
+
+### `get_session_usage`
+
+Return current rate-limit / quota status from the [codexbar](https://github.com/codexbar/codexbar) CLI. Useful before kicking off a long task — the model can check whether enough of its 5-hour or weekly window is left to finish.
+
+The returned payload always has:
+
+- `available: bool` — whether codexbar was reached at all
+- `ok: bool` — whether codexbar returned a real reading vs. an error envelope
+- `summary` — best-effort `{window_5h_pct, window_weekly_pct}` extraction
+- `raw` — the unmodified codexbar JSON, for consumers that want to do their own parsing
+- `error` — non-null only when codexbar returned an error envelope
+
+Returns `{"available": false, "reason": "..."}` if codexbar is missing or disabled. The session is never blocked by usage telemetry.
+
+## Usage auto-enrichment
+
+When `MIRROR_MIRROR_USAGE` is on (default), every `set_readout` call also runs `get_session_usage` server-side and:
+
+1. Attaches the snapshot to `metadata.usage_snapshot` on the persisted readout (great for offline calibration: do high-usage readouts predict drops?).
+2. Adds an extra epistemic flag when peak window usage is ≥70% (`"quota pressure may affect session continuity (peak window usage ~X%)"`) or ≥90% (`"... critical"`). The flag is informational, not enforced.
+
+If codexbar is unavailable or returns an error, the readout is persisted without enrichment — quota telemetry is best-effort.
 
 ## Persistence
 

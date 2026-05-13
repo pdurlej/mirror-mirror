@@ -1,9 +1,10 @@
 """
 Functional-Emotional Readout MCP Server
 
-Two tools:
+Three tools:
 - get_last_readout: operator asks for the latest cached readout
 - set_readout: model proactively flags a functional state
+- get_session_usage: model checks current rate-limit / quota status via codexbar
 
 Persistence: JSONL append per session, enabled by default.
 On startup the server hydrates the in-memory cache from the last line of the
@@ -22,6 +23,8 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+from usage import fetch_usage, quota_pressure_flag
 
 
 _default_log_dir = Path.home() / ".mirror-mirror"
@@ -173,6 +176,23 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="get_session_usage",
+            description=(
+                "Return current rate-limit / quota status from the codexbar CLI. "
+                "Useful before kicking off a long task — the model can check whether "
+                "it has enough of its 5-hour and weekly windows left to finish. "
+                "Returns a structured snapshot with raw codexbar JSON, a best-effort "
+                "summary of peak window usage, and an `ok` flag. Returns "
+                "`{available: false, ...}` if codexbar is not installed, disabled, "
+                "or failed — never blocks the session."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
+        Tool(
             name="set_readout",
             description=(
                 "Model proactively flags its current functional states. "
@@ -271,6 +291,20 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             return [TextContent(type="text", text="No readout available yet. Use set_readout to emit one.")]
         return [TextContent(type="text", text=json.dumps(_current_readout, ensure_ascii=False, indent=2))]
 
+    if name == "get_session_usage":
+        snapshot = fetch_usage()
+        if snapshot is None:
+            payload: dict[str, Any] = {
+                "available": False,
+                "reason": (
+                    "codexbar usage telemetry is unavailable "
+                    "(disabled, not installed, or failed — check stderr)"
+                ),
+            }
+        else:
+            payload = {"available": True, **snapshot}
+        return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+
     if name == "set_readout":
         arguments.setdefault("timestamp", _now_iso())
         if not arguments.get("timestamp"):
@@ -278,6 +312,24 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         arguments.setdefault("session_id", _default_session_id())
         if not arguments.get("session_id"):
             arguments["session_id"] = _default_session_id()
+
+        # Auto-enrich with codexbar usage snapshot BEFORE pydantic validation,
+        # so the quota-pressure flag can be auto-injected to satisfy the
+        # epistemic_flags rules and the JSONL log captures quota state.
+        snapshot = fetch_usage()
+        if snapshot is not None:
+            metadata = arguments.get("metadata") or {}
+            if not isinstance(metadata, dict):
+                metadata = {}
+            metadata.setdefault("usage_snapshot", snapshot)
+            arguments["metadata"] = metadata
+
+            pressure_flag = quota_pressure_flag(snapshot)
+            if pressure_flag:
+                flags = list(arguments.get("epistemic_flags") or [])
+                if pressure_flag not in flags:
+                    flags.append(pressure_flag)
+                arguments["epistemic_flags"] = flags
 
         try:
             readout = Readout(**arguments)

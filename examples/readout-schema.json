@@ -79,7 +79,7 @@
     },
     "metadata": {
       "type": "object",
-      "description": "Optional free-form metadata. Reserved for future calibration work (context_usage_percent, model version, task_id, etc.). Schema is intentionally unconstrained at v0.1."
+      "description": "Optional free-form metadata. Reserved for future calibration work (context_usage_percent, model version, task_id, etc.). Schema is intentionally unconstrained. The MCP server auto-attaches `metadata.usage_snapshot` with a codexbar quota reading when MIRROR_MIRROR_USAGE is on."
     }
   },
   "additionalProperties": false
