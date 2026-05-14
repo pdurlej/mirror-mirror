@@ -220,6 +220,26 @@ class TestContextUsagePercentObserved:
         assert _bucket_for_percent(100.0) == "near-context-limit"
 
 
+class TestRecentFailures:
+    """Issue #8 — self-reported failure counter, Reflexion-style trigger."""
+
+    def test_defaults_to_none(self):
+        r = Readout(**make_valid_readout())
+        assert r.recent_failures is None
+
+    def test_zero_is_valid(self):
+        r = Readout(**make_valid_readout(recent_failures=0))
+        assert r.recent_failures == 0
+
+    def test_positive_counter_accepted(self):
+        r = Readout(**make_valid_readout(recent_failures=3))
+        assert r.recent_failures == 3
+
+    def test_negative_raises(self):
+        with pytest.raises(Exception):
+            Readout(**make_valid_readout(recent_failures=-1))
+
+
 class TestCorrectionsReceived:
     """Issue #2 — simple counter of operator interventions per readout."""
 

@@ -76,6 +76,7 @@ class Readout(BaseModel):
     recommendation_to_operator: str
     context_usage_percent_observed: float | None = Field(default=None, ge=0.0, le=100.0)
     corrections_received: int | None = Field(default=None, ge=0)
+    recent_failures: int | None = Field(default=None, ge=0)
     metadata: dict[str, Any] | None = None
 
     @field_validator("session_position")
@@ -333,6 +334,17 @@ async def list_tools() -> list[Tool]:
                             "re-read the situation. Calibration signal: do honest readouts require "
                             "more or fewer corrections than performative ones? Model populates this "
                             "from its own count — over-attribution risk is real; start conservative."
+                        ),
+                    },
+                    "recent_failures": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": (
+                            "Optional. Self-reported count of recent task failures since the previous "
+                            "readout — failed attempts the model itself flags, not corrections from the "
+                            "operator. Reflexion 2023 triggers reflection at 30+ actions or 3+ repeated "
+                            "failed actions; this field captures the second of those signals. Over-"
+                            "attribution risk is real; start conservative."
                         ),
                     },
                     "metadata": {
