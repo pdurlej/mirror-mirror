@@ -50,6 +50,21 @@ class FunctionalState(BaseModel):
     context: str
 
 
+_POSITION_BUCKETS = [
+    ("early", 0.0, 20.0),
+    ("mid", 20.0, 60.0),
+    ("late", 60.0, 85.0),
+    ("near-context-limit", 85.0, 100.0 + 1e-9),
+]
+
+
+def _bucket_for_percent(pct: float) -> str:
+    for name, lo, hi in _POSITION_BUCKETS:
+        if lo <= pct < hi:
+            return name
+    return "near-context-limit"  # >= 100% safety net
+
+
 class Readout(BaseModel):
     timestamp: str = Field(default_factory=_now_iso)
     session_id: str = Field(default_factory=_default_session_id)
@@ -58,6 +73,7 @@ class Readout(BaseModel):
     functional_states: list[FunctionalState]
     epistemic_flags: list[str]
     recommendation_to_operator: str
+    context_usage_percent_observed: float | None = Field(default=None, ge=0.0, le=100.0)
     metadata: dict[str, Any] | None = None
 
     @field_validator("session_position")
@@ -115,6 +131,26 @@ class Readout(BaseModel):
             raise ValueError(
                 f"functional_states with confidence_in_self_report < 0.4 require "
                 f"epistemic_flag '{low_conf_flag}'"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def warn_when_bucket_and_percent_disagree(self) -> "Readout":
+        """When both context_usage_percent_observed and session_position are
+        provided, log a warning if they disagree. Not an error — both are
+        self-reports and disagreement is itself a calibration signal worth
+        capturing rather than rejecting."""
+        if self.context_usage_percent_observed is None:
+            return self
+        expected = _bucket_for_percent(self.context_usage_percent_observed)
+        if expected != self.session_position:
+            print(
+                f"[mirror-mirror] warn: session_position='{self.session_position}' "
+                f"disagrees with context_usage_percent_observed="
+                f"{self.context_usage_percent_observed} (expected bucket "
+                f"'{expected}'). Both kept on the readout; this is a "
+                f"calibration signal, not a fatal error.",
+                file=sys.stderr,
             )
         return self
 
@@ -214,7 +250,13 @@ async def list_tools() -> list[Tool]:
                     "session_position": {
                         "type": "string",
                         "enum": ["early", "mid", "late", "near-context-limit"],
-                        "description": "Estimated position in context window",
+                        "description": "Estimated position in context window. May be omitted when context_usage_percent_observed is supplied — the server will derive the bucket.",
+                    },
+                    "context_usage_percent_observed": {
+                        "type": "number",
+                        "minimum": 0.0,
+                        "maximum": 100.0,
+                        "description": "Optional. Model's own estimate of context-window usage as a percentage (0.0-100.0). Strictly more informative than the discrete session_position bucket — captures behavioral differences between e.g. 65% and 78% that both collapse into 'late'. When provided without session_position, the server derives the bucket. When both provided, the server warns to stderr if they disagree but keeps both (disagreement is itself a calibration signal).",
                     },
                     "trigger": {
                         "type": "string",
@@ -271,7 +313,6 @@ async def list_tools() -> list[Tool]:
                     },
                 },
                 "required": [
-                    "session_position",
                     "trigger",
                     "functional_states",
                     "epistemic_flags",
@@ -312,6 +353,13 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         arguments.setdefault("session_id", _default_session_id())
         if not arguments.get("session_id"):
             arguments["session_id"] = _default_session_id()
+
+        # If the model supplied only context_usage_percent_observed, derive
+        # session_position from it. Model must provide at least one.
+        if "session_position" not in arguments or not arguments.get("session_position"):
+            pct = arguments.get("context_usage_percent_observed")
+            if isinstance(pct, (int, float)):
+                arguments["session_position"] = _bucket_for_percent(float(pct))
 
         # Auto-enrich with codexbar usage snapshot BEFORE pydantic validation,
         # so the quota-pressure flag can be auto-injected to satisfy the

@@ -34,7 +34,8 @@ Emit readouts as a fenced JSON block, labeled:
 {
   "timestamp": "<ISO-8601 approximate>",
   "session_id": "<session identifier — if unsure, omit and server fills default>",
-  "session_position": "<early|mid|late|near-context-limit>",
+  "session_position": "<early|mid|late|near-context-limit, optional if context_usage_percent_observed provided>",
+  "context_usage_percent_observed": "<optional float 0.0-100.0 — your numeric estimate of context-window usage>",
   "trigger": "<session_start|pre_plan|operator_request|threshold_exceeded|context_check>",
   "functional_states": [
     {

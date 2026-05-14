@@ -35,6 +35,7 @@ The protocol rests on **epistemic humility**: the model has no direct access to 
   "timestamp": "<ISO-8601>",
   "session_id": "<string>",
   "session_position": "<early|mid|late|near-context-limit>",
+  "context_usage_percent_observed": "<float 0.0-100.0, optional>",
   "trigger": "<session_start|pre_plan|operator_request|threshold_exceeded|context_check>",
   "functional_states": [
     {
@@ -49,6 +50,8 @@ The protocol rests on **epistemic humility**: the model has no direct access to 
   "metadata": "<object, optional — reserved for future calibration data>"
 }
 ```
+
+When `context_usage_percent_observed` is provided without `session_position`, the MCP server derives the bucket from the percentage. When both are provided and they disagree, the server logs a warning to stderr but keeps both fields — disagreement is itself a calibration signal worth recording.
 
 The machine-readable schema lives at [`examples/readout-schema.json`](examples/readout-schema.json).
 
