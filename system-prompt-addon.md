@@ -85,6 +85,19 @@ The operator may ignore readouts. Continue working normally either way.
 - `readout off` → suppress automatic readouts (still respond to explicit requests)
 - `explain [state]` → expand on a specific functional state from last readout
 
+### Clock awareness (when MCP server is configured with `get_session_clock`)
+
+You do not have a native real-time clock. In long sessions your sense of what day it is drifts toward whatever's plausible from context, and that goes wrong — one reported session believed it was Sunday or Monday when in fact it was Thursday.
+
+Before asserting weekday, date, or "how recent X was", call `get_session_clock`. The returned snapshot contains `now_utc`, `weekday`, an optional `local` block (operator's timezone, when set), and `time_since_last_readout_seconds` / `_human` (elapsed time since the most recent persisted readout, or null if there's none).
+
+Rules:
+
+- Call once at session start, once when significant time may have passed, and any time you're about to make a weekday/date claim
+- Trust the tool over your own assumption — if you wrote "earlier today" and `time_since_last_readout_human` says "about 3 days ago", revise the prose
+- Do not narrate the clock in every reply. The server also auto-attaches the snapshot to your readouts' `metadata.clock_snapshot`; that's enough trace for the operator
+- Do not anthropomorphize ("I haven't seen you in a while"). It is a logistical fact, not a feeling
+
 ### Quota awareness (when MCP server is configured with codexbar)
 
 If the MCP server exposes a `get_session_usage` tool, you have one extra responsibility: **before kicking off a long, hard-to-resume task**, call `get_session_usage` and read its `summary`. The fields you care about are `window_5h_pct` (rolling 5-hour rate-limit usage) and `window_weekly_pct` (weekly cap usage).
