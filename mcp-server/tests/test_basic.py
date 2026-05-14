@@ -166,6 +166,62 @@ class TestReadoutValidation:
         assert readout.metadata is None
 
 
+class TestContextUsagePercentObserved:
+    """Issue #1 — first-class numeric percent alongside the discrete bucket."""
+
+    def test_defaults_to_none(self):
+        r = Readout(**make_valid_readout())
+        assert r.context_usage_percent_observed is None
+
+    def test_accepts_valid_percent(self):
+        r = Readout(**make_valid_readout(context_usage_percent_observed=42.5))
+        assert r.context_usage_percent_observed == 42.5
+
+    def test_negative_percent_raises(self):
+        with pytest.raises(Exception):
+            Readout(**make_valid_readout(context_usage_percent_observed=-1.0))
+
+    def test_over_100_raises(self):
+        with pytest.raises(Exception):
+            Readout(**make_valid_readout(context_usage_percent_observed=101.0))
+
+    def test_consistent_pair_passes_silently(self, capsys):
+        # 10% sits firmly in 'early' — no warning
+        Readout(**make_valid_readout(
+            session_position="early",
+            context_usage_percent_observed=10.0,
+        ))
+        assert "warn" not in capsys.readouterr().err.lower()
+
+    def test_disagreement_warns_but_does_not_raise(self, capsys):
+        # 10% but bucket says 'late' — kept, warned
+        r = Readout(**make_valid_readout(
+            session_position="late",
+            context_usage_percent_observed=10.0,
+            epistemic_flags=[
+                "self-report only — no vector readout available",
+                "may be drift artifact of long context",
+            ],
+        ))
+        assert r.session_position == "late"
+        assert r.context_usage_percent_observed == 10.0
+        captured = capsys.readouterr().err
+        assert "disagrees" in captured
+        assert "calibration signal" in captured
+
+    def test_bucket_helper_boundaries(self):
+        from server import _bucket_for_percent
+        assert _bucket_for_percent(0.0) == "early"
+        assert _bucket_for_percent(19.9) == "early"
+        assert _bucket_for_percent(20.0) == "mid"
+        assert _bucket_for_percent(59.9) == "mid"
+        assert _bucket_for_percent(60.0) == "late"
+        assert _bucket_for_percent(84.9) == "late"
+        assert _bucket_for_percent(85.0) == "near-context-limit"
+        assert _bucket_for_percent(99.9) == "near-context-limit"
+        assert _bucket_for_percent(100.0) == "near-context-limit"
+
+
 class TestFlagConsistencyValidator:
     """PROTOCOL.md §5.3 — conditional epistemic-flag rules enforced server-side."""
 
@@ -313,6 +369,26 @@ class TestMcpTools:
         assert "drift artifact" in result[0].text
 
     @pytest.mark.asyncio
+    async def test_set_readout_derives_session_position_from_percent(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(server_module, "READOUTS_FILE", tmp_path / "r.jsonl")
+        monkeypatch.setattr(server_module, "_current_readout", None)
+        data = make_valid_readout()
+        del data["session_position"]
+        data["context_usage_percent_observed"] = 72.0  # → 'late'
+        # 'late' requires the drift flag, so include it
+        data["epistemic_flags"] = [
+            "self-report only — no vector readout available",
+            "may be drift artifact of long context",
+        ]
+        result = await server_module.call_tool("set_readout", data)
+        assert "Readout accepted and persisted" in result[0].text
+        persisted = json.loads(
+            (tmp_path / "r.jsonl").read_text(encoding="utf-8").strip()
+        )
+        assert persisted["session_position"] == "late"
+        assert persisted["context_usage_percent_observed"] == 72.0
+
+    @pytest.mark.asyncio
     async def test_persist_failure_does_not_break_tool_call(self, monkeypatch, capsys):
         # Point to an impossible path so _persist fails with OSError
         bad_path = Path("/proc/this/is/not/writable/readouts.jsonl")
@@ -371,4 +447,9 @@ class TestSchemaFile:
         with schema_path.open("r", encoding="utf-8") as f:
             schema = json.load(f)
         assert schema["title"] == "mirror-mirror readout"
-        assert "session_position" in schema["required"]
+        # session_position is no longer required at the schema level — the
+        # server derives it from context_usage_percent_observed when only the
+        # numeric form is supplied. trigger remains required.
+        assert "trigger" in schema["required"]
+        assert "session_position" in schema["properties"]
+        assert "context_usage_percent_observed" in schema["properties"]

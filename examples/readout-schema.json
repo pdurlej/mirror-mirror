@@ -5,7 +5,6 @@
   "description": "Functional-emotional readout emitted by an LLM under the mirror-mirror protocol. See PROTOCOL.md for the authoritative spec.",
   "type": "object",
   "required": [
-    "session_position",
     "trigger",
     "functional_states",
     "epistemic_flags",
@@ -23,7 +22,13 @@
     "session_position": {
       "type": "string",
       "enum": ["early", "mid", "late", "near-context-limit"],
-      "description": "Estimated position in the context window. early=<20%, mid=20-60%, late=60-85%, near-context-limit=>85%."
+      "description": "Estimated position in the context window. early=<20%, mid=20-60%, late=60-85%, near-context-limit=>85%. Optional when context_usage_percent_observed is provided — the server derives the bucket."
+    },
+    "context_usage_percent_observed": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 100.0,
+      "description": "Model's own estimate of context-window usage as a percentage. Strictly more informative than the discrete session_position bucket. When provided without session_position, the server derives the bucket. When both are provided and disagree, the server warns to stderr but keeps both (disagreement is a calibration signal)."
     },
     "trigger": {
       "type": "string",
