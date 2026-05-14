@@ -64,6 +64,8 @@ claude mcp get mirror_mirror
 
 - `MIRROR_MIRROR_LOG` — absolute path to the JSONL log. Defaults to `~/.mirror-mirror/readouts.jsonl`.
 - `MIRROR_MIRROR_SESSION` — default session identifier when a readout omits `session_id`. Defaults to `default`.
+- `MIRROR_MIRROR_CLOCK` — set to `off` to disable wall-clock auto-enrichment of `set_readout`. Default: on. The `get_session_clock` tool itself is unaffected.
+- `MIRROR_MIRROR_TIMEZONE` — IANA timezone (e.g. `Europe/Warsaw`) for the `local` block in clock snapshots. Default: omit `local`.
 - `MIRROR_MIRROR_USAGE` — set to `off` to disable the codexbar usage integration. Default: on.
 - `MIRROR_MIRROR_USAGE_PROVIDER` — codexbar `--provider` argument. Default: `claude`.
 - `MIRROR_MIRROR_USAGE_CMD` — override the entire usage command (useful for tests). Default: `codexbar usage --json`. If `--provider` is not present, it is appended.
@@ -101,6 +103,14 @@ Readouts that fail these rules are rejected with a validation error.
 
 Return the most recent cached readout. This does not trigger a fresh self-assessment. Ask the model `readout?` first if you need a new readout.
 
+### `get_session_clock`
+
+Return current wall-clock state: UTC time, weekday, optional local-timezone block, and time elapsed since the last persisted readout. Models do not have a native clock; this is the counter to confabulation like "I think it's Monday" in long sessions.
+
+Returns `{now_utc, weekday, weekday_index, [local], last_readout_timestamp, time_since_last_readout_seconds, time_since_last_readout_human}`. Elapsed-time fields are null when no prior readout exists.
+
+The tool always responds — `MIRROR_MIRROR_CLOCK=off` only disables the implicit attachment on `set_readout`, not the explicit pull path.
+
 ### `get_session_usage`
 
 Return current rate-limit / quota status from the [codexbar](https://github.com/codexbar/codexbar) CLI. Useful before kicking off a long task — the model can check whether enough of its 5-hour or weekly window is left to finish.
@@ -115,14 +125,15 @@ The returned payload always has:
 
 Returns `{"available": false, "reason": "..."}` if codexbar is missing or disabled. The session is never blocked by usage telemetry.
 
-## Usage auto-enrichment
+## Auto-enrichment on `set_readout`
 
-When `MIRROR_MIRROR_USAGE` is on (default), every `set_readout` call also runs `get_session_usage` server-side and:
+Two best-effort enrichments run server-side before pydantic validation:
 
-1. Attaches the snapshot to `metadata.usage_snapshot` on the persisted readout (great for offline calibration: do high-usage readouts predict drops?).
-2. Adds an extra epistemic flag when peak window usage is ≥70% (`"quota pressure may affect session continuity (peak window usage ~X%)"`) or ≥90% (`"... critical"`). The flag is informational, not enforced.
+**Wall-clock snapshot** (when `MIRROR_MIRROR_CLOCK` is on, default). Attaches `metadata.clock_snapshot` with `now_utc`, `weekday`, elapsed time since last readout, and an optional `local` block when `MIRROR_MIRROR_TIMEZONE` is set. Local, free, no failure modes.
 
-If codexbar is unavailable or returns an error, the readout is persisted without enrichment — quota telemetry is best-effort.
+**codexbar usage snapshot** (when `MIRROR_MIRROR_USAGE` is on, default). Attaches `metadata.usage_snapshot` with the codexbar reading (or `ok: false` when codexbar errored). Adds an extra epistemic flag when peak window usage is ≥70% (`"quota pressure may affect session continuity (peak window usage ~X%)"`) or ≥90% (`"... critical"`).
+
+If both are off and the model passes no `metadata`, the readout is persisted with `metadata: null` — same contract as v0.1.
 
 ## Persistence
 

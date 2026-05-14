@@ -24,6 +24,7 @@ from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from clock import get_snapshot as get_clock_snapshot, is_enabled as clock_enabled
 from usage import fetch_usage, quota_pressure_flag
 
 
@@ -213,6 +214,24 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="get_session_clock",
+            description=(
+                "Return current wall-clock state: UTC time, weekday, and time "
+                "elapsed since the last persisted readout. Use this BEFORE "
+                "asserting weekday, date, or 'how recent X was' — models do "
+                "not have a native clock and confabulate plausible-but-wrong "
+                "answers in long sessions. The snapshot includes a 'local' "
+                "block when MIRROR_MIRROR_TIMEZONE is set. "
+                "time_since_last_readout_* is null when no prior readout exists. "
+                "Free, local, no subprocess — call as needed."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
+        Tool(
             name="get_session_usage",
             description=(
                 "Return current rate-limit / quota status from the codexbar CLI. "
@@ -345,6 +364,10 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             return [TextContent(type="text", text="No readout available yet. Use set_readout to emit one.")]
         return [TextContent(type="text", text=json.dumps(_current_readout, ensure_ascii=False, indent=2))]
 
+    if name == "get_session_clock":
+        snapshot = get_clock_snapshot(READOUTS_FILE)
+        return [TextContent(type="text", text=json.dumps(snapshot, ensure_ascii=False, indent=2))]
+
     if name == "get_session_usage":
         snapshot = fetch_usage()
         if snapshot is None:
@@ -374,23 +397,33 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             if isinstance(pct, (int, float)):
                 arguments["session_position"] = _bucket_for_percent(float(pct))
 
-        # Auto-enrich with codexbar usage snapshot BEFORE pydantic validation,
-        # so the quota-pressure flag can be auto-injected to satisfy the
-        # epistemic_flags rules and the JSONL log captures quota state.
+        # Auto-enrich BEFORE pydantic validation so any auto-injected flags
+        # (e.g. quota pressure) can satisfy the epistemic_flags rules and the
+        # JSONL log captures full wall-clock + quota state.
+        existing_metadata = arguments.get("metadata")
+        metadata: dict[str, Any] = (
+            dict(existing_metadata) if isinstance(existing_metadata, dict) else {}
+        )
+
+        # Wall-clock snapshot — local, free, attached unless explicitly off.
+        if clock_enabled():
+            metadata.setdefault("clock_snapshot", get_clock_snapshot(READOUTS_FILE))
+
+        # codexbar usage — best-effort, may be None.
         snapshot = fetch_usage()
         if snapshot is not None:
-            metadata = arguments.get("metadata") or {}
-            if not isinstance(metadata, dict):
-                metadata = {}
             metadata.setdefault("usage_snapshot", snapshot)
-            arguments["metadata"] = metadata
-
             pressure_flag = quota_pressure_flag(snapshot)
             if pressure_flag:
                 flags = list(arguments.get("epistemic_flags") or [])
                 if pressure_flag not in flags:
                     flags.append(pressure_flag)
                 arguments["epistemic_flags"] = flags
+
+        # Only attach metadata if anything is in there — preserves the v0.1
+        # contract that metadata=None when neither model nor server has data.
+        if metadata:
+            arguments["metadata"] = metadata
 
         try:
             readout = Readout(**arguments)

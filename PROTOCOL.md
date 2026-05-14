@@ -193,7 +193,19 @@ These are tracked in [`FAILURE_MODES.md`](FAILURE_MODES.md).
 
 ---
 
-## 10. Usage telemetry (optional)
+## 10. Clock awareness (optional)
+
+The MCP server exposes `get_session_clock`, a wall-clock tool returning UTC time, weekday, optional local-timezone projection, and elapsed time since the last persisted readout.
+
+Why it matters: models do not have a native real-time clock. In long sessions, "what day it is" drifts toward whatever's plausible from context, and that goes wrong — a reported session believed it was Sunday when it was Thursday. Same failure-mode family as confabulated quota usage: a fact the model behaves on without grounding.
+
+Every `set_readout` is auto-enriched with `metadata.clock_snapshot` so the JSONL log captures both wall-clock and quota state at each readout. The v0.3 calibration study uses this substrate to ask whether long inter-readout gaps predict confabulation.
+
+Disable with `MIRROR_MIRROR_CLOCK=off`. The `get_session_clock` tool itself is always callable — only the implicit attachment on `set_readout` is gated.
+
+---
+
+## 11. Usage telemetry (optional)
 
 The MCP server can optionally enrich every readout with a snapshot of the model's quota usage by shelling out to the [codexbar](https://github.com/codexbar/codexbar) CLI. This gives the operator (and the model) visibility into:
 
@@ -208,7 +220,7 @@ Disable with `MIRROR_MIRROR_USAGE=off`. See `mcp-server/README.md` for environme
 
 ---
 
-## 11. Roadmap (informational)
+## 12. Roadmap (informational)
 
 | Version | Goal |
 |---------|------|
