@@ -447,4 +447,9 @@ class TestSchemaFile:
         with schema_path.open("r", encoding="utf-8") as f:
             schema = json.load(f)
         assert schema["title"] == "mirror-mirror readout"
-        assert "session_position" in schema["required"]
+        # session_position is no longer required at the schema level — the
+        # server derives it from context_usage_percent_observed when only the
+        # numeric form is supplied. trigger remains required.
+        assert "trigger" in schema["required"]
+        assert "session_position" in schema["properties"]
+        assert "context_usage_percent_observed" in schema["properties"]
