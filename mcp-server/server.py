@@ -74,6 +74,7 @@ class Readout(BaseModel):
     epistemic_flags: list[str]
     recommendation_to_operator: str
     context_usage_percent_observed: float | None = Field(default=None, ge=0.0, le=100.0)
+    corrections_received: int | None = Field(default=None, ge=0)
     metadata: dict[str, Any] | None = None
 
     @field_validator("session_position")
@@ -302,6 +303,18 @@ async def list_tools() -> list[Tool]:
                     "recommendation_to_operator": {
                         "type": "string",
                         "description": "Concrete, actionable recommendation for the operator (min 10 chars).",
+                    },
+                    "corrections_received": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": (
+                            "Optional. Count of operator interventions since the previous readout "
+                            "(or since session start for the first readout). A correction = operator "
+                            "pushed back, named a state the model missed, or steered the model to "
+                            "re-read the situation. Calibration signal: do honest readouts require "
+                            "more or fewer corrections than performative ones? Model populates this "
+                            "from its own count — over-attribution risk is real; start conservative."
+                        ),
                     },
                     "metadata": {
                         "type": "object",
