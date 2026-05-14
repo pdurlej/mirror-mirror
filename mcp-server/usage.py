@@ -32,6 +32,7 @@ import os
 import shlex
 import subprocess
 import sys
+from pathlib import Path
 from typing import Any
 
 
@@ -50,9 +51,16 @@ def is_enabled() -> bool:
 def _resolve_command() -> list[str]:
     raw = os.environ.get("MIRROR_MIRROR_USAGE_CMD", DEFAULT_CMD).strip()
     cmd = shlex.split(raw)
+    if not cmd:
+        return cmd
 
-    # Append --provider unless the user already passed one in MIRROR_MIRROR_USAGE_CMD.
-    if "--provider" not in cmd:
+    # Only auto-append --provider when shelling out to the actual codexbar
+    # binary. Custom commands (test stubs, alternative wrappers, alternative
+    # CLIs) are used verbatim — if they need a provider, they should bake it
+    # in themselves. Otherwise we'd hand --provider to programs that don't
+    # understand it (e.g. GNU `cat` errors out with "unrecognized option").
+    binary = Path(cmd[0]).name
+    if binary == "codexbar" and "--provider" not in cmd:
         provider = os.environ.get("MIRROR_MIRROR_USAGE_PROVIDER", DEFAULT_PROVIDER)
         cmd += ["--provider", provider]
 

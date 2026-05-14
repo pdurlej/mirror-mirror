@@ -55,6 +55,47 @@ def make_valid_readout(**overrides) -> dict:
     return base
 
 
+class TestResolveCommand:
+    """The provider-injection logic — making sure we don't hand `--provider`
+    to programs that don't understand it (the original CI failure: GNU cat
+    rejects unknown long options while BSD cat tolerates them, so the test
+    stubs only failed on Linux runners)."""
+
+    def test_default_codexbar_gets_provider_appended(self, monkeypatch):
+        monkeypatch.setenv("MIRROR_MIRROR_USAGE", "on")
+        monkeypatch.delenv("MIRROR_MIRROR_USAGE_CMD", raising=False)
+        monkeypatch.delenv("MIRROR_MIRROR_USAGE_PROVIDER", raising=False)
+        cmd = usage_module._resolve_command()
+        assert cmd[0] == "codexbar"
+        assert "--provider" in cmd
+        assert cmd[cmd.index("--provider") + 1] == "claude"
+
+    def test_codexbar_with_explicit_provider_not_double_appended(self, monkeypatch):
+        monkeypatch.setenv("MIRROR_MIRROR_USAGE", "on")
+        monkeypatch.setenv(
+            "MIRROR_MIRROR_USAGE_CMD", "codexbar usage --json --provider gemini"
+        )
+        cmd = usage_module._resolve_command()
+        assert cmd.count("--provider") == 1
+        assert cmd[cmd.index("--provider") + 1] == "gemini"
+
+    def test_custom_binary_does_not_get_provider(self, monkeypatch):
+        """The actual CI regression: `cat /tmp/stub.json` must NOT get --provider."""
+        monkeypatch.setenv("MIRROR_MIRROR_USAGE", "on")
+        monkeypatch.setenv("MIRROR_MIRROR_USAGE_CMD", "cat /tmp/stub.json")
+        cmd = usage_module._resolve_command()
+        assert cmd == ["cat", "/tmp/stub.json"]
+        assert "--provider" not in cmd
+
+    def test_codexbar_by_absolute_path_still_recognised(self, monkeypatch):
+        monkeypatch.setenv("MIRROR_MIRROR_USAGE", "on")
+        monkeypatch.setenv(
+            "MIRROR_MIRROR_USAGE_CMD", "/opt/homebrew/bin/codexbar usage --json"
+        )
+        cmd = usage_module._resolve_command()
+        assert "--provider" in cmd
+
+
 class TestUsageDisabled:
     def test_is_enabled_default_off_in_tests(self, monkeypatch):
         # conftest sets MIRROR_MIRROR_USAGE=off; confirm.

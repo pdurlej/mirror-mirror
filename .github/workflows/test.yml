@@ -2,7 +2,17 @@ name: test
 
 on:
   push:
+    branches: [master]
   pull_request:
+    branches: [master]
+
+# A push to master followed by a tag push on the same SHA used to trigger
+# two identical workflow runs (one for the branch, one for the tag) and
+# therefore two emails. Skip tag pushes; cancel in-progress runs on the
+# same ref when a new commit lands.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   python:
