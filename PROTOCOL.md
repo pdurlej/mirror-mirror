@@ -193,7 +193,38 @@ These are tracked in [`FAILURE_MODES.md`](FAILURE_MODES.md).
 
 ---
 
-## 10. Clock awareness (optional)
+## 10. Pulse — passive readout trigger
+
+A degraded model is exactly the one that fails to notice it should self-report. The pulse module makes "should I readout now?" arrive in every response of every mirror-mirror tool, so the model cannot fail to see it without ignoring the tool's output entirely.
+
+### Tool: `pulse_check`
+
+Explicit pull. Returns `{due: bool, severity: "none"|"soft"|"hard", reasons: [string], signals: {...}, enabled: bool}`. Same payload is auto-injected as `_pulse` on every `get_session_clock`, `get_session_usage`, and `get_last_readout` response.
+
+### Triggers
+
+The pulse aggregates four signals; max severity wins.
+
+| Signal | Soft | Hard | Status |
+|--------|------|------|--------|
+| MCP tool calls since last readout | 8 | 24 | research-backed (Reflexion 2023, ~1/4 and ~ceiling of 30-action bound) |
+| `context_window.used_percentage` (via statusline) | 15% | 25% | research-backed (BABILong 2024, NoLiMa 2025) |
+| codexbar 5h / weekly peak | 70% | 90% | **ops convention**, not empirical |
+| Wall-clock since last readout | 30 min | 60 min | **fail-safe heuristic only** |
+
+All thresholds configurable via env vars (`MIRROR_MIRROR_PULSE_TOOLCALL_SOFT`, etc.). Disable entirely with `MIRROR_MIRROR_PULSE=off`.
+
+See `docs/RESEARCH.md` for citations and the honest gap analysis.
+
+### How the model should react
+
+On every tool response, check `_pulse.due`. If `soft`, emit a readout at the next natural pause (before continuing a plan, between steps). If `hard`, **stop and confirm before continuing a long task** — the model is likely in a degradation zone where architectural decisions made now will be regretted later.
+
+The pulse is informational, not coercive. Operators can disable it. But while it's active, the model should treat ignoring `_pulse.due` the same way it treats ignoring `epistemic_flags` — as a protocol violation.
+
+---
+
+## 11. Clock awareness (optional)
 
 The MCP server exposes `get_session_clock`, a wall-clock tool returning UTC time, weekday, optional local-timezone projection, and elapsed time since the last persisted readout.
 
@@ -205,7 +236,7 @@ Disable with `MIRROR_MIRROR_CLOCK=off`. The `get_session_clock` tool itself is a
 
 ---
 
-## 11. Usage telemetry (optional)
+## 12. Usage telemetry (optional)
 
 The MCP server can optionally enrich every readout with a snapshot of the model's quota usage by shelling out to the [codexbar](https://github.com/codexbar/codexbar) CLI. This gives the operator (and the model) visibility into:
 
@@ -220,7 +251,7 @@ Disable with `MIRROR_MIRROR_USAGE=off`. See `mcp-server/README.md` for environme
 
 ---
 
-## 12. Roadmap (informational)
+## 13. Roadmap (informational)
 
 | Version | Goal |
 |---------|------|

@@ -122,6 +122,20 @@ If you test it, the most helpful reports are:
 
 Open an issue with synthetic or anonymized notes. See [`PRIVACY.md`](PRIVACY.md) before sharing logs.
 
+## Design decisions and their grounding
+
+Every threshold, default, and behavior in mirror-mirror is one of three things: **research-backed**, **operations convention**, or **fail-safe heuristic**. We do not pretend convention is research, and we name heuristics as heuristics. The full grading lives in [`docs/RESEARCH.md`](docs/RESEARCH.md) with citations.
+
+Short version:
+
+- **Pulse activity trigger** (8 / 24 tool calls) — research-backed. Reflexion 2023's 30-action bound, Voyager's 4-failed-rounds policy, SELF-REFINE's diminishing-returns-after-3 finding.
+- **Pulse context-window trigger** (15% / 25% of advertised) — research-backed. BABILong 2024 (effective context 10–20%), NoLiMa 2025 (GPT-4.1's effective length ~1.6% of 1M advertised), Liu 2023 "Lost in the Middle", Chroma Context Rot 2025.
+- **Pulse quota trigger** (70% / 90%) — **ops convention**. AWS recommended alarms, SRE Book. Not empirically validated for LLM users.
+- **Pulse time trigger** (30 / 60 min) — **fail-safe heuristic only**. No literature supports wall-clock periodicity for agent self-monitoring. Kept as a safety net for idle sessions; the reason string in the pulse output flags it as such.
+- **Severity bands** (none / soft / hard) — convention from monitoring industry, not research-validated for agents.
+
+The grading exists so any future Claude session reading this repo, any operator deciding whether to deploy this in earnest, and any reviewer asking "why these numbers?" can find the answer without trusting our intuition.
+
 ## Project map
 
 ```text
@@ -133,6 +147,9 @@ mirror-mirror/
 ├── EVAL_PLAN.md
 ├── PRIVACY.md
 ├── RESEARCH_NOTES.md
+├── docs/
+│   ├── HANDOFF.md
+│   └── RESEARCH.md          # ← every threshold's literature backing
 ├── examples/
 │   ├── readout-schema.json
 │   ├── readout-example.md
@@ -140,6 +157,11 @@ mirror-mirror/
 │   └── session-without.md
 └── mcp-server/
     ├── server.py
+    ├── clock.py
+    ├── usage.py
+    ├── pulse.py
+    ├── statusline.py
+    ├── statusline_script.py # ← install into Claude Code settings.json
     ├── pyproject.toml
     └── tests/
 ```

@@ -15,4 +15,5 @@ import pytest
 def disable_integrations_by_default(monkeypatch):
     monkeypatch.setenv("MIRROR_MIRROR_USAGE", "off")
     monkeypatch.setenv("MIRROR_MIRROR_CLOCK", "off")
+    monkeypatch.setenv("MIRROR_MIRROR_PULSE", "off")
     yield

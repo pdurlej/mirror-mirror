@@ -64,6 +64,13 @@ claude mcp get mirror_mirror
 
 - `MIRROR_MIRROR_LOG` — absolute path to the JSONL log. Defaults to `~/.mirror-mirror/readouts.jsonl`.
 - `MIRROR_MIRROR_SESSION` — default session identifier when a readout omits `session_id`. Defaults to `default`.
+- `MIRROR_MIRROR_PULSE` — set to `off` to disable the passive pulse. Default: on.
+- `MIRROR_MIRROR_PULSE_TOOLCALL_SOFT` / `_HARD` — activity thresholds (default 8 / 24).
+- `MIRROR_MIRROR_PULSE_CONTEXT_PCT_SOFT` / `_HARD` — context-window % thresholds (default 15.0 / 25.0).
+- `MIRROR_MIRROR_PULSE_QUOTA_SOFT` / `_HARD` — codexbar window % thresholds (default 70.0 / 90.0).
+- `MIRROR_MIRROR_PULSE_TIME_SOFT_MIN` / `_HARD_MIN` — fail-safe time thresholds (default 30 / 60).
+- `MIRROR_MIRROR_STATUSLINE_PATH` — statusline state file (default `~/.cache/mirror-mirror/claude-code-status.json`).
+- `MIRROR_MIRROR_STATUSLINE_MAX_AGE_S` — max snapshot age before treating as stale (default 30).
 - `MIRROR_MIRROR_CLOCK` — set to `off` to disable wall-clock auto-enrichment of `set_readout`. Default: on. The `get_session_clock` tool itself is unaffected.
 - `MIRROR_MIRROR_TIMEZONE` — IANA timezone (e.g. `Europe/Warsaw`) for the `local` block in clock snapshots. Default: omit `local`.
 - `MIRROR_MIRROR_USAGE` — set to `off` to disable the codexbar usage integration. Default: on.
@@ -102,6 +109,33 @@ Readouts that fail these rules are rejected with a validation error.
 ### `get_last_readout`
 
 Return the most recent cached readout. This does not trigger a fresh self-assessment. Ask the model `readout?` first if you need a new readout.
+
+### `pulse_check`
+
+Explicit pull of the **passive pulse** — a trigger that aggregates four signals (activity / context pressure / quota / time) into a single `due: bool, severity: "none"|"soft"|"hard"` decision. The same payload is auto-injected as `_pulse` on every response of `get_session_clock`, `get_session_usage`, and `get_last_readout`.
+
+Thresholds and their literature backing are documented in [`docs/RESEARCH.md`](../docs/RESEARCH.md). Activity (8/24) and context (15%/25%) are research-backed; quota (70%/90%) is operations convention; time (30/60 min) is fail-safe heuristic only. Every reason string the pulse emits flags its own evidentiary status.
+
+### Statusline integration (required for context-pressure trigger)
+
+Without statusline configuration the pulse loses access to `context_window.used_percentage`, the most research-supported signal. Setup is one-time:
+
+1. Find your Claude Code `settings.json` (`~/.claude/settings.json` for user-level, `.claude/settings.json` for project-level).
+2. Add or merge:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "python3 /absolute/path/to/mcp-server/statusline_script.py",
+    "refreshInterval": 5
+  }
+}
+```
+
+3. The script atomic-writes Claude Code's session JSON to `~/.cache/mirror-mirror/claude-code-status.json` every 5 seconds. The mirror-mirror MCP server reads from there.
+
+If you already have a custom statusline command, wrap it or alternate via shell rather than replacing — `statusline_script.py` is designed to be small and pipe-friendly.
 
 ### `get_session_clock`
 

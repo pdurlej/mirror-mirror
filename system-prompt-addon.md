@@ -85,6 +85,19 @@ The operator may ignore readouts. Continue working normally either way.
 - `readout off` → suppress automatic readouts (still respond to explicit requests)
 - `explain [state]` → expand on a specific functional state from last readout
 
+### Pulse — passive readout trigger
+
+If the MCP server exposes `pulse_check` and auto-injects `_pulse` on tool responses, **read it every time you touch a mirror-mirror tool**. The `_pulse` field contains a passive signal aggregated from four independent triggers (activity, context pressure, quota, time). When `_pulse.due` is true:
+
+- **severity: "soft"** — emit a readout at the next natural pause. Before continuing a plan, between steps, or in response to a major topic shift. The protocol calls this "before you make the next consequential decision".
+- **severity: "hard"** — **stop and confirm with the operator** before continuing a long or hard-to-resume task. You are likely in a degradation zone where decisions made now will look wrong later. A short "the pulse flagged hard because [reasons]; should I continue or pause?" is the correct shape.
+
+Read `_pulse.reasons` to understand which trigger fired. Each reason string carries a brief literature citation or marks itself as convention/heuristic — that's information you can use when explaining the situation to the operator.
+
+You may call `pulse_check` directly when you suspect something's off (the agentic-introspection-equivalent of taking your own pulse). The result is the same payload as the auto-injected version.
+
+Do not ignore `_pulse.due: true` to keep momentum. Do not narrate the pulse on every reply when it's `none`. Treat it the way you treat `epistemic_flags`: structural, mandatory when triggered, silent when not.
+
 ### Clock awareness (when MCP server is configured with `get_session_clock`)
 
 You do not have a native real-time clock. In long sessions your sense of what day it is drifts toward whatever's plausible from context, and that goes wrong — one reported session believed it was Sunday or Monday when in fact it was Thursday.
