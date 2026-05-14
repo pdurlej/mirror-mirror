@@ -72,51 +72,86 @@ def _resolve_timeout() -> float:
 def _summarize(payload: Any) -> dict[str, Any]:
     """Best-effort percentage extraction from a codexbar payload.
 
-    Supports two common shapes:
-    1) Top-level dict with `window_5h` / `window_weekly` keys (our preferred shape).
-    2) A list-of-providers payload with `usage` / `limits` / `windows` nested.
+    Supports three shapes:
 
-    Anything we can't recognise is left out; the raw payload is always preserved
-    elsewhere so consumers can do their own parsing.
+    1) **Real codexbar shape** (the one we actually see in production):
+       a list with `[{usage: {primary, secondary, tertiary}}]` where each
+       sub-block has `windowMinutes` + `usedPercent`. We classify by
+       `windowMinutes`: 300 → 5-hour, 10080 → weekly. When multiple weekly
+       windows exist (Claude Max has both a Sonnet-weighted weekly and an
+       Opus-weighted weekly), we take the max — peak weekly pressure is
+       what matters operationally.
+
+    2) Top-level dict with explicit `window_5h` / `window_weekly` keys
+       (synthetic shape, useful for tests and other providers).
+
+    3) `usage.{five_hour_used_pct, weekly_used_pct}` flat shape.
+
+    Anything we can't recognise is left out; the raw payload is always
+    preserved elsewhere so consumers can do their own parsing.
     """
     summary: dict[str, Any] = {"extracted_from_keys": []}
 
-    candidates = []
+    candidates: list[dict[str, Any]] = []
     if isinstance(payload, list):
-        candidates.extend(payload)
+        candidates.extend(c for c in payload if isinstance(c, dict))
     elif isinstance(payload, dict):
         candidates.append(payload)
 
     for cand in candidates:
-        if not isinstance(cand, dict):
-            continue
+        # Shape 1 — real codexbar
+        usage_block = cand.get("usage")
+        if isinstance(usage_block, dict):
+            weekly_pcts: list[float] = []
+            for slot_name in ("primary", "secondary", "tertiary"):
+                slot = usage_block.get(slot_name)
+                if not isinstance(slot, dict):
+                    continue
+                pct = slot.get("usedPercent")
+                minutes = slot.get("windowMinutes")
+                if not isinstance(pct, (int, float)):
+                    continue
+                pct = float(pct)
+                # ~5 hours = 300 minutes; tolerate 270-360 for safety
+                if isinstance(minutes, (int, float)) and 270 <= minutes <= 360:
+                    if "window_5h_pct" not in summary or pct > summary["window_5h_pct"]:
+                        summary["window_5h_pct"] = pct
+                        summary["extracted_from_keys"].append(f"usage.{slot_name}.5h")
+                # ~1 week = 10080 minutes
+                elif isinstance(minutes, (int, float)) and 9000 <= minutes <= 11000:
+                    weekly_pcts.append(pct)
+                    summary["extracted_from_keys"].append(f"usage.{slot_name}.weekly")
+            if weekly_pcts:
+                summary["window_weekly_pct"] = max(weekly_pcts)
 
-        for key in ("window_5h", "five_hour", "rolling_5h", "session"):
-            v = cand.get(key)
-            if isinstance(v, dict):
-                pct = _find_pct(v)
-                if pct is not None:
-                    summary["window_5h_pct"] = pct
-                    summary["extracted_from_keys"].append(key)
-                    break
-
-        for key in ("window_weekly", "weekly", "week"):
-            v = cand.get(key)
-            if isinstance(v, dict):
-                pct = _find_pct(v)
-                if pct is not None:
-                    summary["window_weekly_pct"] = pct
-                    summary["extracted_from_keys"].append(key)
-                    break
-
-        if isinstance(cand.get("usage"), dict):
-            usage_block = cand["usage"]
-            if "five_hour_used_pct" in usage_block:
+            # Flat shape inside usage block (Shape 3)
+            if "five_hour_used_pct" in usage_block and "window_5h_pct" not in summary:
                 summary["window_5h_pct"] = float(usage_block["five_hour_used_pct"])
                 summary["extracted_from_keys"].append("usage.five_hour_used_pct")
-            if "weekly_used_pct" in usage_block:
+            if "weekly_used_pct" in usage_block and "window_weekly_pct" not in summary:
                 summary["window_weekly_pct"] = float(usage_block["weekly_used_pct"])
                 summary["extracted_from_keys"].append("usage.weekly_used_pct")
+
+        # Shape 2 — synthetic test/other-provider top-level keys
+        if "window_5h_pct" not in summary:
+            for key in ("window_5h", "five_hour", "rolling_5h", "session"):
+                v = cand.get(key)
+                if isinstance(v, dict):
+                    pct = _find_pct(v)
+                    if pct is not None:
+                        summary["window_5h_pct"] = pct
+                        summary["extracted_from_keys"].append(key)
+                        break
+
+        if "window_weekly_pct" not in summary:
+            for key in ("window_weekly", "weekly", "week"):
+                v = cand.get(key)
+                if isinstance(v, dict):
+                    pct = _find_pct(v)
+                    if pct is not None:
+                        summary["window_weekly_pct"] = pct
+                        summary["extracted_from_keys"].append(key)
+                        break
 
     return summary
 

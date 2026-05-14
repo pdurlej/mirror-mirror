@@ -94,6 +94,50 @@ class TestUsageFetch:
         assert snap["summary"]["window_5h_pct"] == 70.0
         assert snap["summary"]["window_weekly_pct"] == 50.0
 
+    def test_fetch_with_real_codexbar_claude_shape(self, usage_stub):
+        """The actual JSON shape codexbar 2.1.x emits for --provider claude.
+
+        primary = 5-hour window (windowMinutes=300), secondary/tertiary = weekly
+        windows (windowMinutes=10080). When multiple weekly windows exist
+        (Sonnet vs Opus on Claude Max), we report the max.
+        """
+        usage_stub([
+            {
+                "provider": "claude",
+                "source": "web",
+                "version": "2.1.139",
+                "usage": {
+                    "primary": {
+                        "resetsAt": "2026-05-14T10:00:00Z",
+                        "usedPercent": 43,
+                        "windowMinutes": 300,
+                    },
+                    "secondary": {
+                        "resetsAt": "2026-05-18T21:00:00Z",
+                        "usedPercent": 49,
+                        "windowMinutes": 10080,
+                    },
+                    "tertiary": {
+                        "resetsAt": "2026-05-18T21:00:00Z",
+                        "usedPercent": 2,
+                        "windowMinutes": 10080,
+                    },
+                    "loginMethod": "Claude Max",
+                    "accountEmail": "p@durlej.me",
+                },
+            }
+        ])
+        snap = usage_module.fetch_usage()
+        assert snap is not None
+        assert snap["ok"] is True
+        assert snap["summary"]["window_5h_pct"] == 43.0
+        # Peak weekly across secondary (49) and tertiary (2) = 49
+        assert snap["summary"]["window_weekly_pct"] == 49.0
+        keys = snap["summary"]["extracted_from_keys"]
+        assert "usage.primary.5h" in keys
+        assert "usage.secondary.weekly" in keys
+        assert "usage.tertiary.weekly" in keys
+
     def test_fetch_with_codexbar_error_envelope(self, usage_stub):
         usage_stub([
             {
