@@ -82,6 +82,11 @@
       "minLength": 10,
       "description": "Concrete, actionable recommendation for the operator. Avoid vague advice like 'verify something'."
     },
+    "corrections_received": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Optional count of operator interventions since the previous readout (or since session start for the first readout). Calibration signal — useful for asking whether honest readouts require more or fewer corrections than performative ones."
+    },
     "metadata": {
       "type": "object",
       "description": "Optional free-form metadata. Reserved for future calibration work (context_usage_percent, model version, task_id, etc.). Schema is intentionally unconstrained. The MCP server auto-attaches `metadata.usage_snapshot` with a codexbar quota reading when MIRROR_MIRROR_USAGE is on."

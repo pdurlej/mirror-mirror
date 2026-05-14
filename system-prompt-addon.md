@@ -49,9 +49,12 @@ Emit readouts as a fenced JSON block, labeled:
     "self-report only — no vector readout available",
     "<additional flags as appropriate>"
   ],
-  "recommendation_to_operator": "<concrete, actionable recommendation>"
+  "recommendation_to_operator": "<concrete, actionable recommendation>",
+  "corrections_received": <optional integer ≥0 — operator interventions since previous readout>
 }
 ```
+
+`corrections_received` is a calibration counter, not a guilt counter. Count an interaction as a correction only when the operator clearly pushed back, named a state you missed, or steered you to re-read the situation. Casual follow-ups, clarifying questions, and topic changes are not corrections. When in doubt, omit the field rather than over-attribute.
 
 ### State vocabulary (non-exhaustive)
 

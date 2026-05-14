@@ -47,11 +47,14 @@ The protocol rests on **epistemic humility**: the model has no direct access to 
   ],
   "epistemic_flags": ["<string>"],
   "recommendation_to_operator": "<string — concrete, actionable>",
+  "corrections_received": "<integer ≥0, optional — operator interventions since previous readout>",
   "metadata": "<object, optional — reserved for future calibration data>"
 }
 ```
 
 When `context_usage_percent_observed` is provided without `session_position`, the MCP server derives the bucket from the percentage. When both are provided and they disagree, the server logs a warning to stderr but keeps both fields — disagreement is itself a calibration signal worth recording.
+
+`corrections_received` is a separate calibration signal. A correction = the operator pushed back on something the model said, named a state the model missed, or steered the model to re-read the situation. The model populates the counter from its own attribution — over-attribution risk is real, so start conservative. Useful for asking whether honest readouts require more or fewer operator interventions than performative ones.
 
 The machine-readable schema lives at [`examples/readout-schema.json`](examples/readout-schema.json).
 
