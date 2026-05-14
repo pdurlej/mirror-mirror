@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from clock import get_snapshot as get_clock_snapshot, is_enabled as clock_enabled
 from usage import fetch_usage, quota_pressure_flag
+import pulse as pulse_module
 
 
 _default_log_dir = Path.home() / ".mirror-mirror"
@@ -215,6 +216,27 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="pulse_check",
+            description=(
+                "Explicit pull of the pulse — a passive trigger that aggregates "
+                "four signals into a decision on whether to emit a fresh readout: "
+                "(1) tool-call count since last readout (Reflexion-aligned), "
+                "(2) context window utilisation (BABILong/NoLiMa-aligned), "
+                "(3) codexbar quota pressure (ops convention), "
+                "(4) wall-clock time since last readout (fail-safe heuristic). "
+                "Returns {due, severity, reasons, signals}. severity is one of "
+                "'none' / 'soft' / 'hard'. The same payload is auto-injected as "
+                "`_pulse` on every get_session_clock / get_session_usage / "
+                "get_last_readout response, so you generally do not need to "
+                "call this directly — just react to `_pulse.due` when you see it."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
+        Tool(
             name="get_session_clock",
             description=(
                 "Return current wall-clock state: UTC time, weekday, and time "
@@ -367,31 +389,62 @@ async def list_tools() -> list[Tool]:
     ]
 
 
+def _attach_pulse(payload: dict[str, Any], usage_summary: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Embed the current pulse decision under a `_pulse` key. Read-only;
+    does not increment or reset the activity counter — the caller is
+    responsible for that bookkeeping."""
+    payload["_pulse"] = pulse_module.assess(
+        readouts_file=READOUTS_FILE,
+        usage_summary=usage_summary,
+    )
+    return payload
+
+
 @server.call_tool()
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     global _current_readout
 
+    # Activity bookkeeping for the pulse module. Counts ALL mirror-mirror
+    # tool invocations against the "since last readout" budget. set_readout
+    # resets the counter at the bottom of its branch.
+    pulse_module.increment_activity()
+
+    if name == "pulse_check":
+        usage = fetch_usage()
+        usage_summary = (usage.get("summary") if isinstance(usage, dict) else None)
+        payload = pulse_module.assess(
+            readouts_file=READOUTS_FILE,
+            usage_summary=usage_summary,
+        )
+        return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+
     if name == "get_last_readout":
         if _current_readout is None:
-            return [TextContent(type="text", text="No readout available yet. Use set_readout to emit one.")]
-        return [TextContent(type="text", text=json.dumps(_current_readout, ensure_ascii=False, indent=2))]
+            payload: dict[str, Any] = {"readout": None, "message": "No readout available yet. Use set_readout to emit one."}
+        else:
+            payload = {"readout": _current_readout}
+        _attach_pulse(payload)
+        return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
     if name == "get_session_clock":
         snapshot = get_clock_snapshot(READOUTS_FILE)
+        _attach_pulse(snapshot)
         return [TextContent(type="text", text=json.dumps(snapshot, ensure_ascii=False, indent=2))]
 
     if name == "get_session_usage":
         snapshot = fetch_usage()
         if snapshot is None:
-            payload: dict[str, Any] = {
+            payload = {
                 "available": False,
                 "reason": (
                     "codexbar usage telemetry is unavailable "
                     "(disabled, not installed, or failed — check stderr)"
                 ),
             }
+            _attach_pulse(payload)
         else:
             payload = {"available": True, **snapshot}
+            _attach_pulse(payload, usage_summary=snapshot.get("summary"))
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
     if name == "set_readout":
@@ -445,6 +498,10 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         readout_dict = readout.model_dump(mode="json")
         _current_readout = readout_dict
         _persist(readout_dict)
+
+        # Reset the activity counter — a fresh readout has happened, the
+        # tool-call budget restarts from zero.
+        pulse_module.reset_activity()
 
         return [
             TextContent(

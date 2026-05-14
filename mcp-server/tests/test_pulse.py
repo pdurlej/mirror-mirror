@@ -208,6 +208,66 @@ class TestTimeTrigger:
         assert result["severity"] == "hard"
 
 
+class TestServerIntegration:
+    """End-to-end: pulse must show up in every get_* response and a
+    pulse_check tool returns the same payload as the auto-injection."""
+
+    @pytest.mark.asyncio
+    async def test_pulse_check_tool_returns_assessment(self, tmp_path, monkeypatch):
+        import server as server_module
+        monkeypatch.setattr(server_module, "READOUTS_FILE", tmp_path / "missing.jsonl")
+        for _ in range(8):
+            pulse_module.increment_activity()
+
+        result = await server_module.call_tool("pulse_check", {})
+        payload = json.loads(result[0].text)
+        # pulse_check itself increments by 1 (it counts as a tool call), so
+        # by the time assess() runs activity_count is 9 — well above soft 8.
+        assert payload["due"] is True
+        assert payload["severity"] in ("soft", "hard")
+
+    @pytest.mark.asyncio
+    async def test_get_session_clock_auto_injects_pulse(self, tmp_path, monkeypatch):
+        import server as server_module
+        monkeypatch.setattr(server_module, "READOUTS_FILE", tmp_path / "missing.jsonl")
+        for _ in range(7):
+            pulse_module.increment_activity()
+
+        result = await server_module.call_tool("get_session_clock", {})
+        payload = json.loads(result[0].text)
+        assert "_pulse" in payload
+        # 7 + 1 (this call) = 8 → soft
+        assert payload["_pulse"]["severity"] == "soft"
+        assert payload["_pulse"]["due"] is True
+
+    @pytest.mark.asyncio
+    async def test_get_last_readout_auto_injects_pulse(self, tmp_path, monkeypatch):
+        import server as server_module
+        monkeypatch.setattr(server_module, "READOUTS_FILE", tmp_path / "missing.jsonl")
+        monkeypatch.setattr(server_module, "_current_readout", None)
+
+        result = await server_module.call_tool("get_last_readout", {})
+        payload = json.loads(result[0].text)
+        assert "_pulse" in payload
+        assert "readout" in payload
+        assert payload["readout"] is None
+
+    @pytest.mark.asyncio
+    async def test_set_readout_resets_activity_counter(self, tmp_path, monkeypatch):
+        import server as server_module
+        monkeypatch.setattr(server_module, "READOUTS_FILE", tmp_path / "r.jsonl")
+        monkeypatch.setattr(server_module, "_current_readout", None)
+
+        for _ in range(10):
+            pulse_module.increment_activity()
+
+        from test_basic import make_valid_readout
+        await server_module.call_tool("set_readout", make_valid_readout())
+        # set_readout itself increments by 1 then resets, so after the call
+        # the counter is 0 (not 11).
+        assert pulse_module.get_activity_count() == 0
+
+
 class TestAggregation:
     def test_max_severity_wins(self, tmp_path, monkeypatch):
         """activity=hard but context=none → still hard."""

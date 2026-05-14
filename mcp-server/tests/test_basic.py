@@ -406,8 +406,10 @@ class TestMcpTools:
         result = await server_module.call_tool("get_last_readout", {})
         assert len(result) == 1
         parsed = json.loads(result[0].text)
-        assert parsed["session_id"] == "sid-1"
-        assert parsed["session_position"] == "early"
+        # Since #8 (passive pulse), get_last_readout wraps the readout in a
+        # payload that also carries the _pulse field.
+        assert parsed["readout"]["session_id"] == "sid-1"
+        assert parsed["readout"]["session_position"] == "early"
 
     @pytest.mark.asyncio
     async def test_unknown_tool_returns_message(self):
