@@ -161,7 +161,8 @@ mirror-mirror/
     ├── usage.py
     ├── pulse.py
     ├── statusline.py
-    ├── statusline_script.py # ← install into Claude Code settings.json
+    ├── statusline_script.py    # ← install into Claude Code statusLine
+    ├── hook_pulse_injector.py  # ← install into Claude Code UserPromptSubmit hook
     ├── pyproject.toml
     └── tests/
 ```
