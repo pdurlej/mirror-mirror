@@ -116,6 +116,34 @@ Explicit pull of the **passive pulse** — a trigger that aggregates four signal
 
 Thresholds and their literature backing are documented in [`docs/RESEARCH.md`](../docs/RESEARCH.md). Activity (8/24) and context (15%/25%) are research-backed; quota (70%/90%) is operations convention; time (30/60 min) is fail-safe heuristic only. Every reason string the pulse emits flags its own evidentiary status.
 
+### Hook integration (recommended — required if model doesn't proactively call mirror-mirror tools)
+
+Passive `_pulse` injection (on tool responses) only fires when the model already touches a mirror-mirror tool. Some models — especially Opus-style reasoners — don't proactively call introspection tools. For those sessions the pulse is invisible.
+
+Fix: install a `UserPromptSubmit` hook that calls `pulse_check` before the model sees each user message. When the pulse fires, the hook prepends a `[mirror-mirror pulse: ...]` block to the prompt. The model cannot avoid seeing it — it's part of the user message, not a tool the model has to choose to call.
+
+Add to `~/.claude/settings.json` (user-level) or `.claude/settings.json` (project-level):
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /absolute/path/to/mcp-server/hook_pulse_injector.py"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Disable via the existing `MIRROR_MIRROR_PULSE=off` — no separate hook flag. The hook script soft-fails on every error path (missing pulse module, bad stdin, etc.) so it cannot break Claude Code's prompt flow.
+
 ### Statusline integration (required for context-pressure trigger)
 
 Without statusline configuration the pulse loses access to `context_window.used_percentage`, the most research-supported signal. Setup is one-time:
