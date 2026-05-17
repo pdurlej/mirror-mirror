@@ -154,7 +154,8 @@ mirror-mirror/
 │   ├── readout-schema.json
 │   ├── readout-example.md
 │   ├── session-with.md
-│   └── session-without.md
+│   ├── session-without.md
+│   └── session-pan-herbatka.md  # ← real field observation (n=1, not proof)
 └── mcp-server/
     ├── server.py
     ├── clock.py
